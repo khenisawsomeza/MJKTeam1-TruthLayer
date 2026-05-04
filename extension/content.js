@@ -244,23 +244,40 @@ async function processPost(postElement) {
     debugLog('Processing post. Extracted text length:', text.length);
     highlightPost(postElement);
 
-    try {
-        chrome.runtime.sendMessage({ 
-            type: 'ANALYZE_CONTENT', 
-            content: text,
-            url: window.location.href 
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error('TruthLayer: Runtime error', chrome.runtime.lastError);
-                return;
-            }
-            if (response && response.success) {
-                injectBanner(postElement, response.data);
-            }
-        });
-    } catch (error) {
-        console.error('TruthLayer: Extension communication error', error);
+    // Safety check: ensure extension context is still valid
+    if (!chrome.runtime || !chrome.runtime.id) {
+        debugLog('Extension context invalidated. Stopping process.');
+        return;
     }
+
+    return new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({ 
+                type: 'ANALYZE_CONTENT', 
+                content: text.substring(0, 5000),
+                url: window.location.href 
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    const msg = chrome.runtime.lastError.message;
+                    if (!msg.includes('context invalidated') && !msg.includes('message port closed')) {
+                        console.error('TruthLayer: Runtime error', msg);
+                    }
+                    resolve();
+                    return;
+                }
+                
+                if (response && response.success) {
+                    injectBanner(postElement, response.data);
+                }
+                resolve();
+            });
+        } catch (error) {
+            if (!error.message.includes('context invalidated')) {
+                console.error('TruthLayer: Extension communication error', error);
+            }
+            resolve();
+        }
+    });
 }
 
 function debounce(func, wait) {
@@ -272,11 +289,15 @@ function debounce(func, wait) {
     };
 }
 
-const runScan = debounce(() => {
+const runScan = debounce(async () => {
     debugLog('Running batched DOM scan...');
     const posts = detectPosts();
     debugLog(`Detected ${posts.length} new posts.`);
-    posts.forEach(processPost);
+    
+    // Process sequentially to avoid overwhelming the background port
+    for (const post of posts) {
+        await processPost(post);
+    }
 }, 500);
 
 function observeDOM() {
