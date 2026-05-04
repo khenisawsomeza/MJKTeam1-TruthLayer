@@ -3,10 +3,11 @@ import joblib
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Dict, Any
 
 app = FastAPI()
 
-# Enable CORS for local testing if needed
+# Enable CORS for local testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,74 +24,177 @@ try:
     vectorizer = joblib.load('vectorizer.pkl')
     model = joblib.load('model.pkl')
     ML_AVAILABLE = True
+    print("✓ Models loaded successfully")
 except FileNotFoundError:
-    print("Model files not found. Run train.py first.")
+    print("⚠ Model files not found. Run train.py first.")
     ML_AVAILABLE = False
 
-def calculate_rule_score(text: str):
+
+def calculate_rule_score(text: str) -> tuple[float, List[str]]:
+    """
+    Rule-based scoring system.
+    Returns: (score 0-100, list of reasons)
+    """
     score = 100
     reasons = []
     
-    # Rule 1: Sensational words
-    sensational_words = ['shocking', 'breaking', '!!!', 'miracle', 'weird trick', 'secret']
     lower_text = text.lower()
+    
+    # Rule 1: Sensational words
+    sensational_words = [
+        'shocking', 'breaking', 'miracle', 'weird trick', 'secret',
+        'exclusive', 'unbelievable', 'proof', 'warning', 'must watch',
+        'dont want you to know', 'hate this', 'you wont believe'
+    ]
     for word in sensational_words:
         if word in lower_text:
-            score -= 20
-            reasons.append(f"Sensational phrase detected: '{word}' (-20)")
+            score -= 15
+            reasons.append(f"Sensational language: '{word}'")
             break
-            
-    # Rule 2: Excess punctuation
-    if text.count('!') > 3:
+    
+    # Rule 2: Excessive punctuation
+    exclamation_count = text.count('!')
+    if exclamation_count > 3:
         score -= 10
-        reasons.append("Excessive exclamation points (-10)")
-        
-    # Rule 3: ALL CAPS words
+        reasons.append(f"Excessive punctuation ({exclamation_count} exclamation marks)")
+    
+    # Rule 3: Multiple ALL CAPS words
     words = text.split()
-    all_caps_words = [w for w in words if w.isupper() and len(w) > 3]
-    if len(all_caps_words) > 1:
-        score -= 10
-        reasons.append(f"Contains multiple ALL CAPS words (-10)")
-        
+    all_caps_words = [w for w in words if w.isupper() and len(w) > 2]
+    if len(all_caps_words) >= 2:
+        score -= 12
+        reasons.append(f"Multiple ALL CAPS words detected")
+    
+    # Rule 4: Question marks (urgent tone)
+    question_count = text.count('?')
+    if question_count >= 3:
+        score -= 8
+        reasons.append("Excessive questioning (urgent tone)")
+    
+    # Rule 5: Text length (very short posts may be low quality)
+    if len(text) < 50:
+        score -= 5
+        reasons.append("Text too short for reliable analysis")
+    
+    # Clamp score
+    score = max(0, min(100, score))
     return score, reasons
 
-@app.post("/analyze")
-def analyze_post(post: PostData):
-    text = post.text
-    if not text:
-        return {"score": 100, "label": "Low Risk", "reasons": ["No text provided"]}
 
-    # Rule-Based Scoring
-    rule_score, reasons = calculate_rule_score(text)
+def predict_with_ml(text: str) -> Dict[str, Any]:
+    """
+    ML-based prediction using the trained model.
+    Returns: {fake_probability, confidence, explanation}
+    """
+    if not ML_AVAILABLE:
+        return {
+            "fake_probability": 0.5,
+            "confidence": 0.0,
+            "explanation": "ML model unavailable"
+        }
     
-    # ML Scoring
-    ml_penalty = 0
-    if ML_AVAILABLE:
+    try:
         # Vectorize input
         X = vectorizer.transform([text])
-        # Predict probability of class 1 (Fake)
-        fake_probability = model.predict_proba(X)[0][1]
         
-        if fake_probability > 0.3: # Threshold for considering it
-            ml_penalty = int(fake_probability * 50)
-            reasons.append(f"Model detected misinformation pattern ({int(fake_probability * 100)}% confidence)")
-    else:
-        reasons.append("ML Model offline. Using only rule-based system.")
+        # Get probabilities for both classes
+        # Class 0 = Real, Class 1 = Fake
+        probabilities = model.predict_proba(X)[0]
+        
+        fake_probability = float(probabilities[1])  # Probability of being fake (class 1)
+        
+        # Confidence = how far from 0.5 (uncertain)
+        # Maximum confidence is 1.0 (completely certain), minimum is 0.0 (completely uncertain)
+        confidence = abs(fake_probability - 0.5) * 2
+        
+        return {
+            "fake_probability": round(fake_probability, 3),
+            "confidence": round(confidence, 3),
+            "explanation": f"ML model predicts {int(fake_probability * 100)}% likelihood of misinformation"
+        }
+    except Exception as e:
+        print(f"ML prediction error: {e}")
+        return {
+            "fake_probability": 0.5,
+            "confidence": 0.0,
+            "explanation": f"ML error: {str(e)}"
+        }
 
-    # Final Score Calculation
-    final_score = rule_score - ml_penalty
-    final_score = max(0, min(100, final_score)) # Clamp between 0-100
 
-    # Determine Label
-    if final_score >= 80:
+@app.post("/analyze")
+def analyze_post(post: PostData) -> Dict[str, Any]:
+    """
+    Main analysis endpoint.
+    Returns comprehensive scoring with confidence and breakdown.
+    """
+    text = post.text.strip()
+    
+    if not text:
+        return {
+            "fake_probability": 0.5,
+            "confidence": 0.0,
+            "score": 50,
+            "label": "Uncertain",
+            "reasons": ["No text provided"],
+            "explanation": "Empty text cannot be analyzed"
+        }
+    
+    # Rule-based scoring
+    rule_score, rule_reasons = calculate_rule_score(text)
+    
+    # ML-based scoring
+    ml_result = predict_with_ml(text)
+    fake_probability = ml_result["fake_probability"]
+    ml_confidence = ml_result["confidence"]
+    
+    # Convert ML probability to score (0-100)
+    # fake_probability 1.0 = score 0 (high risk)
+    # fake_probability 0.0 = score 100 (low risk)
+    ml_score = (1.0 - fake_probability) * 100
+    
+    # Calculate overall confidence
+    # High confidence when ML model is certain and rule-based system agrees
+    overall_confidence = ml_confidence
+    
+    # Simple agreement check: do rule and ML roughly agree?
+    rule_agrees_with_ml = abs(rule_score - ml_score) < 30
+    if rule_agrees_with_ml:
+        overall_confidence = min(1.0, overall_confidence * 1.2)  # Boost confidence if they agree
+    
+    # Final score: weighted average
+    # Rules: 30%, ML: 70% (ML model is more sophisticated)
+    final_score = (rule_score * 0.3) + (ml_score * 0.7)
+    final_score = max(0, min(100, final_score))  # Clamp 0-100
+    
+    # Determine label based on score
+    if final_score >= 75:
         label = "Low Risk"
     elif final_score >= 50:
         label = "Medium Risk"
     else:
         label = "High Risk"
-
+    
+    # Combine all reasons
+    all_reasons = rule_reasons + [ml_result["explanation"]]
+    
     return {
-        "score": final_score,
+        "fake_probability": fake_probability,
+        "confidence": round(overall_confidence, 3),
+        "score": round(final_score, 1),
         "label": label,
-        "reasons": reasons
+        "reasons": all_reasons,
+        "breakdown": {
+            "rule_score": round(rule_score, 1),
+            "ml_score": round(ml_score, 1)
+        }
+    }
+
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "ok",
+        "ml_available": ML_AVAILABLE,
+        "service": "TruthLayer AI Service"
     }
