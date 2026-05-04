@@ -9,14 +9,17 @@
   ],
   "host_permissions": [
     "*://*.facebook.com/*",
-    "http://localhost:3000/*"
+    "http://localhost:*/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.facebook.com/*"],
+      "matches": [
+        "*://*.facebook.com/*",
+        "http://localhost:*/*"
+      ],
       "css": ["styles.css"],
       "js": ["content.js"],
       "run_at": "document_idle"
