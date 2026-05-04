@@ -2,7 +2,7 @@ const DEBUG_MODE = true;
 
 function debugLog(...args) {
     if (DEBUG_MODE) {
-        console.log('[TruthLayer Debug]', ...args);
+        //console.log('[TruthLayer Debug]', ...args);
     }
 }
 
@@ -220,6 +220,46 @@ document.addEventListener('click', (ev) => {
         showModalForElement(shareEl);
     } catch (err) {
         console.error('TruthLayer share interception error', err);
+    }
+}, true);
+
+// Listen for "See more" clicks to trigger a re-analysis of the post
+document.addEventListener('click', (ev) => {
+    try {
+        const target = ev.target;
+        if (!target) return;
+
+        const text = (target.textContent || '').trim().toLowerCase();
+        
+        if (text === 'see more' || target.innerText?.toLowerCase().trim() === 'see more') {
+            console.log('TruthLayer: "See more" click detected!');
+            
+            // CRITICAL: Find the post container IMMEDIATELY. 
+            // Once clicked, FB might remove this button from the DOM, making .closest() fail later.
+            const post = target.closest('[data-truthlayer-processed="true"]') || 
+                         target.closest('[role="article"]') || 
+                         target.closest('[data-pagelet*="FeedUnit"]');
+            
+            if (post) {
+                console.log('TruthLayer: Post container captured. Waiting for DOM to expand...');
+                
+                setTimeout(() => {
+                    console.log('TruthLayer: Triggering re-analysis now.');
+                    // Clear the processed flag
+                    post.removeAttribute('data-truthlayer-processed');
+                    // Remove existing banner
+                    const existingBanner = post.querySelector('.truthlayer-banner');
+                    if (existingBanner) existingBanner.remove();
+                    
+                    // Trigger a scan
+                    if (typeof runScan === 'function') runScan();
+                }, 500); // Wait a bit longer for the text to fully swap
+            } else {
+                console.warn('TruthLayer: Could not find post container for "See more" button.');
+            }
+        }
+    } catch (e) {
+        console.error('TruthLayer SeeMore listener error:', e);
     }
 }, true);
 
@@ -456,8 +496,11 @@ function injectBanner(postElement, data) {
     const banner = document.createElement('div');
     banner.className = `truthlayer-banner truthlayer-popup ${themeClass}`;
 
-    // Avoid injecting the banner multiple times for the same post
-    if (postElement.querySelector('.truthlayer-banner')) return;
+    // Remove any existing banner (e.g. if the post was re-analyzed after clicking "See more")
+    const existing = postElement.querySelector('.truthlayer-banner');
+    if (existing) {
+        existing.remove();
+    }
 
     // Create Reasons HTML
     const reasonsId = `reasons-${Date.now()}`;
@@ -526,7 +569,7 @@ function getDefaultAnalysis(text, errorMsg) {
 async function processPost(postElement) {
     if (postElement.dataset.truthlayerProcessed === "true") return;
 
-    let text = extractPostText(postElement);
+    let text = extractTextFromPost(postElement);
 
     if (!text || text.length < 20) {
         debugLog('Found post but text too short or empty. Length:', text ? text.length : 0);
@@ -538,6 +581,8 @@ async function processPost(postElement) {
 
     debugLog('Processing post. Extracted text length:', text.length);
     highlightPost(postElement);
+
+    console.log('TruthLayer sending text for validation:', text);
 
     try {
         chrome.runtime.sendMessage({
