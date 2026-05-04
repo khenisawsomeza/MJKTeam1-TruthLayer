@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthLayer Test Feed</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .feed-container {
+            width: 100%;
+            max-width: 600px;
+        }
+        .post {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .post-header {
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #1c1e21;
+        }
+        .post-text {
+            color: #050505;
+            line-height: 1.5;
+        }
+        .post-actions {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e4e6eb;
+            color: #65676b;
+            font-weight: 600;
+            display: flex;
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="feed-container">
+        <h1>TruthLayer Local Test Feed</h1>
+        <p>Scroll down to load posts. The extension should highlight them in yellow and process them.</p>
+
+        <!-- Test 1: Role = article -->
+        <div class="post" role="article">
+            <div class="post-header">User One</div>
+            <div class="post-text">
+                <div dir="auto">
+                    Breaking news: The moon is made of green cheese! Scientists have just discovered this amazing fact after analyzing recent samples from the Apollo 11 mission that were kept secret for decades.
+                </div>
+            </div>
+            <div class="post-actions">
+                <span>Like</span>
+                <span>Comment</span>
+                <span>Share</span>
+            </div>
+        </div>
+
+        <!-- Test 2: Heuristic Fallback (Long Text) -->
+        <div class="post">
+            <div class="post-header">User Two</div>
+            <div class="post-text">
+                This is a very long post that doesn't use role="article" or data-pagelet. However, it contains more than 150 characters, so our heuristic fallback should pick it up automatically and test it against the TruthLayer backend. The quick brown fox jumps over the lazy dog. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+            </div>
+            <div class="post-actions">
+                <span>Like</span>
+                <span>Comment</span>
+                <span>Share</span>
+            </div>
+        </div>
+
+        <!-- Test 3: Short text (Should be ignored by heuristics unless it has role="article") -->
+        <div class="post">
+            <div class="post-header">User Three</div>
+            <div class="post-text">
+                Just having a coffee.
+            </div>
+            <div class="post-actions">
+                <span>Like</span>
+                <span>Comment</span>
+                <span>Share</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
