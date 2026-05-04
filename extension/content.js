@@ -137,12 +137,19 @@ function detectPosts(rootNode = document) {
     for (let i = 0; i < postsArray.length; i++) {
         let isParentOfAnother = false;
         
-        // Check if this post contains any other detected post
+        // Check if this post contains any other newly detected post
         for (let j = 0; j < postsArray.length; j++) {
             if (i === j) continue;
             if (postsArray[i].contains(postsArray[j])) {
                 isParentOfAnother = true;
                 break;
+            }
+        }
+        
+        // Also check if it contains a previously processed post
+        if (!isParentOfAnother) {
+            if (postsArray[i].querySelector('[data-truthlayer-processed="true"]')) {
+                isParentOfAnother = true;
             }
         }
         
@@ -238,7 +245,11 @@ async function processPost(postElement) {
     highlightPost(postElement);
 
     try {
-        chrome.runtime.sendMessage({ type: 'ANALYZE_TEXT', text }, (response) => {
+        chrome.runtime.sendMessage({ 
+            type: 'ANALYZE_CONTENT', 
+            content: text,
+            url: window.location.href 
+        }, (response) => {
             if (chrome.runtime.lastError) {
                 console.error('TruthLayer: Runtime error', chrome.runtime.lastError);
                 return;
