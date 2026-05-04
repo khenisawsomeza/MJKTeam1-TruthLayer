@@ -481,6 +481,7 @@ function detectPosts(rootNode = document) {
 }
 
 function injectBanner(postElement, data) {
+    console.log('TruthLayer: Injecting banner with data:', data);
     const { score, label, reasons } = data;
 
     let themeClass = 'truthlayer-low';
@@ -591,11 +592,17 @@ async function processPost(postElement) {
             url: window.location.href
         }, (response) => {
             if (chrome.runtime.lastError) {
-                console.error('TruthLayer: Runtime error', chrome.runtime.lastError);
-                injectBanner(postElement, getDefaultAnalysis(text, chrome.runtime.lastError.message));
+                const errorMsg = chrome.runtime.lastError.message;
+                if (errorMsg.includes('context invalidated')) {
+                    console.log('TruthLayer: Extension context invalidated. Please refresh the page.');
+                    return;
+                }
+                console.error('TruthLayer: Runtime error', errorMsg);
+                injectBanner(postElement, getDefaultAnalysis(text, errorMsg));
                 return;
             }
             if (response && response.success) {
+                console.log('TruthLayer: Analysis received successfully:', response.data);
                 injectBanner(postElement, response.data);
             } else {
                 console.error('TruthLayer: Backend error', response?.error);
@@ -603,38 +610,11 @@ async function processPost(postElement) {
             }
         });
     } catch (error) {
-        console.error('TruthLayer: Extension communication error', error);
-        injectBanner(postElement, getDefaultAnalysis(text, error?.message));
-    }
-
-    return new Promise((resolve) => {
-        try {
-            chrome.runtime.sendMessage({
-                type: 'ANALYZE_CONTENT',
-                content: text.substring(0, 5000),
-                url: window.location.href
-            }, (response) => {
-                if (chrome.runtime.lastError) {
-                    const msg = chrome.runtime.lastError.message;
-                    if (!msg.includes('context invalidated') && !msg.includes('message port closed')) {
-                        console.error('TruthLayer: Runtime error', msg);
-                    }
-                    resolve();
-                    return;
-                }
-
-                if (response && response.success) {
-                    injectBanner(postElement, response.data);
-                }
-                resolve();
-            });
-        } catch (error) {
-            if (!error.message.includes('context invalidated')) {
-                console.error('TruthLayer: Extension communication error', error);
-            }
-            resolve();
+        if (!error.message.includes('context invalidated')) {
+            console.error('TruthLayer: Extension communication error', error);
+            injectBanner(postElement, getDefaultAnalysis(text, error?.message));
         }
-    });
+    }
 }
 
 function debounce(func, wait) {
@@ -651,7 +631,6 @@ const runScan = debounce(async () => {
     const posts = detectPosts();
     debugLog(`Detected ${posts.length} new posts.`);
 
-    // Process sequentially to avoid overwhelming the background port
     for (const post of posts) {
         await processPost(post);
     }
@@ -681,9 +660,7 @@ function observeDOM() {
 }
 
 console.log("TruthLayer extension loaded (Heuristics V3).");
-runScan();
 
-// Initial scan for posts already on the page when the script loads
 function initialScan() {
     const posts = detectPosts();
     posts.forEach(processPost);
@@ -697,7 +674,6 @@ function periodicRescan() {
 }
 
 // Initialize
-console.log("TruthLayer extension loaded.");
 initialScan();
 observeDOM();
 periodicRescan();
