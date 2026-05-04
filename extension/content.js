@@ -21,11 +21,15 @@ function isShareNowTrigger(el) {
 
     const tag = control.tagName && control.tagName.toLowerCase();
     const aria = (control.getAttribute && control.getAttribute('aria-label')) || '';
-    const dataTest = (control.getAttribute && control.getAttribute('data-testid')) || '';
-    const txt = (control.textContent || '').trim();
-
-    // Only accept the exact confirmation button inside the share dialog.
-    if (tag === 'button' && /^(share now)$/i.test(txt)) return control;
+        const selectors = [
+            'div[data-ad-rendering-role="profile_name"] a',
+            'div[data-ad-rendering-role="profile_name"] h4 a',
+            'h4 a',
+            'header h4 a',
+            'a[aria-label^="Hide post by"]',
+            'a[role="link"]',
+            'a'
+        ];
     if (tag === 'div' && /^(share now)$/i.test(txt)) return control;
     if (/^(share now)$/i.test(aria)) return control;
     if (/^(share now)$/i.test(dataTest)) return control;
@@ -230,19 +234,19 @@ document.addEventListener('click', (ev) => {
         if (!target) return;
 
         const text = (target.textContent || '').trim().toLowerCase();
-        
+
         if (text === 'see more' || target.innerText?.toLowerCase().trim() === 'see more') {
             console.log('TruthLayer: "See more" click detected!');
-            
+
             // CRITICAL: Find the post container IMMEDIATELY. 
             // Once clicked, FB might remove this button from the DOM, making .closest() fail later.
-            const post = target.closest('[data-truthlayer-processed="true"]') || 
-                         target.closest('[role="article"]') || 
-                         target.closest('[data-pagelet*="FeedUnit"]');
-            
+            const post = target.closest('[data-truthlayer-processed="true"]') ||
+                target.closest('[role="article"]') ||
+                target.closest('[data-pagelet*="FeedUnit"]');
+
             if (post) {
                 console.log('TruthLayer: Post container captured. Waiting for DOM to expand...');
-                
+
                 setTimeout(() => {
                     console.log('TruthLayer: Triggering re-analysis now.');
                     // Clear the processed flag
@@ -250,7 +254,7 @@ document.addEventListener('click', (ev) => {
                     // Remove existing banner
                     const existingBanner = post.querySelector('.truthlayer-banner');
                     if (existingBanner) existingBanner.remove();
-                    
+
                     // Trigger a scan
                     if (typeof runScan === 'function') runScan();
                 }, 500); // Wait a bit longer for the text to fully swap
@@ -319,6 +323,44 @@ function extractTextFromPost(postElement) {
     // As a last resort, return the post's visible text content (may include UI labels)
     const visible = postElement.textContent ? postElement.textContent.trim() : null;
     return visible || null;
+}
+
+function extractAuthor(postElement) {
+    if (!postElement) return null;
+
+    // Broadened selectors to match multiple FB DOM variants
+    const selectors = [
+        'div[data-ad-rendering-role="profile_name"] a',
+        'div[data-ad-rendering-role="profile_name"] h4 a',
+        'h4 a',
+        'header h4 a',
+        'a[aria-label^="Hide post by"]',
+        'a[role="link"]',
+        'a'
+    ];
+
+    for (const sel of selectors) {
+        const el = postElement.querySelector(sel);
+        if (!el) continue;
+
+        // Prefer visible text
+        let name = (el.innerText || el.textContent || '').trim();
+        if (!name) {
+            // try alt/title attributes or aria-label
+            name = el.getAttribute('title') || el.getAttribute('aria-label') || '';
+            name = name.trim();
+        }
+
+        let url = el.getAttribute('href') || el.getAttribute('data-href') || null;
+        if (url) {
+            // resolve relative URLs
+            try { url = new URL(url, window.location.href).href; } catch (e) { /* leave as-is */ }
+        }
+
+        if (name) return { name, url };
+    }
+
+    return null;
 }
 
 function highlightPost(element) {
@@ -481,6 +523,7 @@ function detectPosts(rootNode = document) {
 }
 
 function injectBanner(postElement, data) {
+    console.log('TruthLayer: Injecting banner with data:', data);
     const { score, label, reasons } = data;
 
     let themeClass = 'truthlayer-low';
@@ -570,6 +613,7 @@ async function processPost(postElement) {
     if (postElement.dataset.truthlayerProcessed === "true") return;
 
     let text = extractTextFromPost(postElement);
+    const author = extractAuthor(postElement);
 
     if (!text || text.length < 20) {
         debugLog('Found post but text too short or empty. Length:', text ? text.length : 0);
@@ -583,19 +627,38 @@ async function processPost(postElement) {
     highlightPost(postElement);
 
     console.log('TruthLayer sending text for validation:', text);
+    if (author) {
+        console.log('TruthLayer detected author/page:', author.name, author.url || 'no url');
+    }
 
     try {
         chrome.runtime.sendMessage({
             type: 'ANALYZE_CONTENT',
             content: text,
-            url: window.location.href
+            url: window.location.href,
+            platform: 'facebook',
+            author,
+            source: author ? {
+                name: author.name,
+                url: author.url,
+                platform: 'facebook'
+            } : {
+                url: window.location.href,
+                platform: 'facebook'
+            }
         }, (response) => {
             if (chrome.runtime.lastError) {
-                console.error('TruthLayer: Runtime error', chrome.runtime.lastError);
-                injectBanner(postElement, getDefaultAnalysis(text, chrome.runtime.lastError.message));
+                const errorMsg = chrome.runtime.lastError.message;
+                if (errorMsg.includes('context invalidated')) {
+                    console.log('TruthLayer: Extension context invalidated. Please refresh the page.');
+                    return;
+                }
+                console.error('TruthLayer: Runtime error', errorMsg);
+                injectBanner(postElement, getDefaultAnalysis(text, errorMsg));
                 return;
             }
             if (response && response.success) {
+                console.log('TruthLayer: Analysis received successfully:', response.data);
                 injectBanner(postElement, response.data);
             } else {
                 console.error('TruthLayer: Backend error', response?.error);
@@ -603,8 +666,10 @@ async function processPost(postElement) {
             }
         });
     } catch (error) {
-        console.error('TruthLayer: Extension communication error', error);
-        injectBanner(postElement, getDefaultAnalysis(text, error?.message));
+        if (!error.message.includes('context invalidated')) {
+            console.error('TruthLayer: Extension communication error', error);
+            injectBanner(postElement, getDefaultAnalysis(text, error?.message));
+        }
     }
 }
 
@@ -617,11 +682,14 @@ function debounce(func, wait) {
     };
 }
 
-const runScan = debounce(() => {
+const runScan = debounce(async () => {
     debugLog('Running batched DOM scan...');
     const posts = detectPosts();
     debugLog(`Detected ${posts.length} new posts.`);
-    posts.forEach(processPost);
+
+    for (const post of posts) {
+        await processPost(post);
+    }
 }, 500);
 
 function observeDOM() {
@@ -648,9 +716,7 @@ function observeDOM() {
 }
 
 console.log("TruthLayer extension loaded (Heuristics V3).");
-runScan();
 
-// Initial scan for posts already on the page when the script loads
 function initialScan() {
     const posts = detectPosts();
     posts.forEach(processPost);
@@ -664,7 +730,6 @@ function periodicRescan() {
 }
 
 // Initialize
-console.log("TruthLayer extension loaded.");
 initialScan();
 observeDOM();
 periodicRescan();
