@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TruthLayer Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+
+    <!-- Header -->
+    <div class="popup-header">
+      <div class="header-top">
+        <div class="header-icon">⚠️</div>
+        <h1 class="header-title">TruthLayer Analysis</h1>
+      </div>
+      <div class="header-status" id="header-status">
+        <span class="status-dot"></span>
+        <span class="status-text" id="status-text">Analyzing this article</span>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="state-loading" id="state-loading">
+      <div class="loading-card">
+        <div class="shimmer-line shimmer-long"></div>
+        <div class="shimmer-line shimmer-medium"></div>
+        <div class="shimmer-line shimmer-short"></div>
+      </div>
+      <div class="loading-card">
+        <div class="shimmer-line shimmer-short"></div>
+        <div class="shimmer-bar"></div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div class="state-error hidden" id="state-error">
+      <div class="error-card">
+        <div class="error-icon">⚠️</div>
+        <p class="error-title" id="error-title">Unable to Analyze</p>
+        <p class="error-message" id="error-message">Could not extract content from this page.</p>
+        <button class="btn-primary" id="btn-retry">Try Again</button>
+      </div>
+    </div>
+
+    <!-- Results State -->
+    <div class="state-results hidden" id="state-results">
+
+      <!-- Article Preview Card -->
+      <div class="card article-card">
+        <div class="article-icon">📄</div>
+        <div class="article-info">
+          <h2 class="article-title" id="article-title">Article Title</h2>
+          <span class="article-domain" id="article-domain">domain.com</span>
+          <p class="article-summary" id="article-summary">Analyzing article content...</p>
+        </div>
+      </div>
+
+      <!-- Credibility Score Card -->
+      <div class="card score-card" id="score-card">
+        <div class="score-top">
+          <div class="score-left">
+            <span class="score-number" id="score-number">—</span>
+            <span class="score-label">Credibility Score</span>
+          </div>
+          <div class="verdict-badge" id="verdict-badge">Checking…</div>
+        </div>
+        <div class="score-bar-container">
+          <div class="score-bar-track">
+            <div class="score-bar-fill" id="score-bar-fill"></div>
+            <div class="score-bar-indicator" id="score-bar-indicator"></div>
+          </div>
+          <div class="score-bar-labels">
+            <span class="bar-label-low">Low</span>
+            <span class="bar-label-high">High</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key Risk Indicators -->
+      <div class="card risk-card" id="risk-card">
+        <h3 class="card-section-title">Key Risk Indicators</h3>
+        <ul class="risk-list" id="risk-list">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+
+      <!-- Emotional Manipulation Warning -->
+      <div class="warning-card hidden" id="warning-card">
+        <div class="warning-icon">😡</div>
+        <div class="warning-content">
+          <h3 class="warning-title" id="warning-title">Emotional Manipulation Detected</h3>
+          <p class="warning-text" id="warning-text">This article may trigger: <strong id="warning-triggers">Fear, Anger</strong></p>
+        </div>
+      </div>
+
+      <!-- Source Verification -->
+      <div class="card source-card" id="source-card">
+        <h3 class="card-section-title">Source Verification</h3>
+        <div class="source-row">
+          <span class="source-label">Source credibility</span>
+          <span class="source-value" id="source-credibility">Unknown</span>
+        </div>
+        <div class="source-note" id="source-note">
+          <span class="source-dot">•</span>
+          <span id="source-note-text">Limited or no external references</span>
+        </div>
+        <button class="btn-outline btn-sm" id="btn-trusted-sources">
+          View Trusted Sources <span class="external-icon">↗</span>
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions">
+        <button class="btn-primary" id="btn-full-analysis">View Full Analysis</button>
+        <button class="btn-warning" id="btn-proceed">Proceed with Caution</button>
+        <button class="btn-outline" id="btn-share">Share Anyway</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
