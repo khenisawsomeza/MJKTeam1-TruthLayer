@@ -1,12 +1,25 @@
-// API Endpoint (Node.js Backend)
-const API_URL = 'http://localhost:3000/analyze';
-
+// No longer need API_URL here, fetch is handled by background.js to bypass CSP
 // Function to extract text from a Facebook post element
 function extractTextFromPost(postElement) {
-    // Facebook has complex nested divs, simple textContent gets almost everything
-    // But we might want to filter out hidden elements or buttons if needed
-    // For MVP, textContent is usually sufficient
-    return postElement.textContent.trim();
+    // Facebook feed posts usually put their actual content inside these data attributes
+    const messageContainer = postElement.querySelector('div[data-ad-preview="message"], div[data-comet-ad-preview="message"]');
+    
+    if (messageContainer) {
+        // The actual text is often deeply nested inside divs with text-align styles
+        const textDivs = messageContainer.querySelectorAll('div[style*="text-align"]');
+        if (textDivs.length > 0) {
+            let extractedText = '';
+            textDivs.forEach(div => {
+                extractedText += div.textContent.trim() + '\n';
+            });
+            return extractedText.trim();
+        }
+        
+        // Fallback: just get the text content of the message container
+        return messageContainer.textContent.trim();
+    }
+    
+    return null;
 }
 
 // Function to inject the UI banner into the post
@@ -84,30 +97,37 @@ function injectBanner(postElement, data) {
 // Function to process a single post
 async function processPost(postElement) {
     if (postElement.dataset.truthlayerProcessed) return;
-    
-    // Mark as processing immediately to prevent duplicate triggers
-    postElement.dataset.truthlayerProcessed = "true";
+
+    // Filter out chat boxes: only process posts that are in the main content area or feed
+    const isMainArea = postElement.closest('div[role="main"]') || postElement.closest('div[role="feed"]');
+    if (!isMainArea) {
+        // Mark it as processed so we don't constantly check chat messages
+        postElement.dataset.truthlayerProcessed = "true";
+        return;
+    }
 
     const text = extractTextFromPost(postElement);
-    if (!text || text.length < 20) return; // Ignore very short posts
+    // Ignore very short posts (like empty placeholders during lazy load)
+    // Do NOT mark as processed yet so we can try again when text is populated
+    if (!text || text.length < 20) return; 
+
+    // Mark as processing only when we actually have text and are about to fetch
+    postElement.dataset.truthlayerProcessed = "true";
 
     try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ text })
+        chrome.runtime.sendMessage({ type: 'ANALYZE_TEXT', text }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('TruthLayer: Runtime error', chrome.runtime.lastError);
+                return;
+            }
+            if (response && response.success) {
+                injectBanner(postElement, response.data);
+            } else {
+                console.error('TruthLayer: Backend error', response?.error);
+            }
         });
-
-        if (response.ok) {
-            const data = await response.json();
-            injectBanner(postElement, data);
-        } else {
-            console.error('TruthLayer: Failed to analyze post', response.status);
-        }
     } catch (error) {
-        console.error('TruthLayer: Error connecting to backend', error);
+        console.error('TruthLayer: Extension communication error', error);
     }
 }
 
@@ -121,6 +141,10 @@ function observeDOM() {
                         // Check if the added node is a post
                         if (node.getAttribute('role') === 'article') {
                             processPost(node);
+                        }
+                        // Check if the added node is INSIDE a post (for lazy-loaded text)
+                        else if (node.closest && node.closest('div[role="article"]')) {
+                            processPost(node.closest('div[role="article"]'));
                         }
                         // Check if the added node contains posts
                         else {
