@@ -21,11 +21,15 @@ function isShareNowTrigger(el) {
 
     const tag = control.tagName && control.tagName.toLowerCase();
     const aria = (control.getAttribute && control.getAttribute('aria-label')) || '';
-    const dataTest = (control.getAttribute && control.getAttribute('data-testid')) || '';
-    const txt = (control.textContent || '').trim();
-
-    // Only accept the exact confirmation button inside the share dialog.
-    if (tag === 'button' && /^(share now)$/i.test(txt)) return control;
+        const selectors = [
+            'div[data-ad-rendering-role="profile_name"] a',
+            'div[data-ad-rendering-role="profile_name"] h4 a',
+            'h4 a',
+            'header h4 a',
+            'a[aria-label^="Hide post by"]',
+            'a[role="link"]',
+            'a'
+        ];
     if (tag === 'div' && /^(share now)$/i.test(txt)) return control;
     if (/^(share now)$/i.test(aria)) return control;
     if (/^(share now)$/i.test(dataTest)) return control;
@@ -321,6 +325,44 @@ function extractTextFromPost(postElement) {
     return visible || null;
 }
 
+function extractAuthor(postElement) {
+    if (!postElement) return null;
+
+    // Broadened selectors to match multiple FB DOM variants
+    const selectors = [
+        'div[data-ad-rendering-role="profile_name"] a',
+        'div[data-ad-rendering-role="profile_name"] h4 a',
+        'h4 a',
+        'header h4 a',
+        'a[aria-label^="Hide post by"]',
+        'a[role="link"]',
+        'a'
+    ];
+
+    for (const sel of selectors) {
+        const el = postElement.querySelector(sel);
+        if (!el) continue;
+
+        // Prefer visible text
+        let name = (el.innerText || el.textContent || '').trim();
+        if (!name) {
+            // try alt/title attributes or aria-label
+            name = el.getAttribute('title') || el.getAttribute('aria-label') || '';
+            name = name.trim();
+        }
+
+        let url = el.getAttribute('href') || el.getAttribute('data-href') || null;
+        if (url) {
+            // resolve relative URLs
+            try { url = new URL(url, window.location.href).href; } catch (e) { /* leave as-is */ }
+        }
+
+        if (name) return { name, url };
+    }
+
+    return null;
+}
+
 function highlightPost(element) {
     if (DEBUG_MODE && element && !element.dataset.truthlayerHighlighted) {
         element.style.border = '2px dashed red';
@@ -571,6 +613,7 @@ async function processPost(postElement) {
     if (postElement.dataset.truthlayerProcessed === "true") return;
 
     let text = extractTextFromPost(postElement);
+    const author = extractAuthor(postElement);
 
     if (!text || text.length < 20) {
         debugLog('Found post but text too short or empty. Length:', text ? text.length : 0);
@@ -584,12 +627,25 @@ async function processPost(postElement) {
     highlightPost(postElement);
 
     console.log('TruthLayer sending text for validation:', text);
+    if (author) {
+        console.log('TruthLayer detected author/page:', author.name, author.url || 'no url');
+    }
 
     try {
         chrome.runtime.sendMessage({
             type: 'ANALYZE_CONTENT',
             content: text,
-            url: window.location.href
+            url: window.location.href,
+            platform: 'facebook',
+            author,
+            source: author ? {
+                name: author.name,
+                url: author.url,
+                platform: 'facebook'
+            } : {
+                url: window.location.href,
+                platform: 'facebook'
+            }
         }, (response) => {
             if (chrome.runtime.lastError) {
                 const errorMsg = chrome.runtime.lastError.message;
