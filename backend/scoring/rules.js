@@ -90,7 +90,7 @@ function analyzeRules(text, options = {}) {
     // Rule 3: Excessive punctuation
     const exclamationCount = (text.match(/!/g) || []).length;
     const questionCount = (text.match(/\?/g) || []).length;
-    
+
     if (exclamationCount > 3) {
         deductions.push(10);
         reasons.push(`Excessive exclamation marks (${exclamationCount})`);
@@ -106,8 +106,8 @@ function analyzeRules(text, options = {}) {
     // Rule 4: ALL CAPS words (multiple)
     const words = text.split(/\s+/);
     const allCapsWords = words.filter(w => /^[A-Z]{3,}$/.test(w));
-    
-    if (allCapsWords.length >= 2) {
+
+    if (allCapsWords.length >= 15) {
         deductions.push(10);
         reasons.push(`Multiple ALL CAPS words (${allCapsWords.length})`);
         severity.push('medium');
