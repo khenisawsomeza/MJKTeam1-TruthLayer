@@ -24,6 +24,7 @@ module.exports = {
         extractDomain: sourceChecker.extractDomain,
         isTrusted: sourceChecker.isTrustedDomain,
         isSuspicious: sourceChecker.isSuspiciousDomain,
+        cleanPageName: sourceChecker.cleanPageName,
         TRUSTED_DOMAINS: sourceChecker.TRUSTED_DOMAINS,
         TRUSTED_PAGES: sourceChecker.TRUSTED_PAGES,
         SUSPICIOUS_DOMAINS: sourceChecker.SUSPICIOUS_DOMAINS
@@ -40,6 +41,6 @@ module.exports = {
     explainer: {
         generate: explainer.generateExplanation,
         formatForAudience: explainer.formatForAudience,
-        extractFindings: explainer.extractKeyFindings
+        extractKeyFindings: explainer.extractKeyFindings
     }
 };
