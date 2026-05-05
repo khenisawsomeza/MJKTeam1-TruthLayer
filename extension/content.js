@@ -877,8 +877,9 @@ function injectRestoreIcon(postElement, data) {
 
     const icon = document.createElement('div');
     icon.className = 'truthlayer-restore-icon';
+    const score = data.score ?? 100;
     icon.innerHTML = 'ⓘ';
-    icon.title = 'Restore TruthLayer Analysis';
+    icon.title = (score >= 70) ? 'View TruthLayer Analysis' : 'Restore TruthLayer Analysis';
 
     icon.addEventListener('click', (e) => {
         e.preventDefault();
@@ -998,7 +999,18 @@ async function processPost(postElement) {
             }
             if (response && response.success) {
                 console.log('TruthLayer: Analysis received successfully:', response.data);
-                injectBanner(postElement, response.data);
+                
+                // If score < 70, auto-show the popup.
+                // If score >= 70, show only a small info icon (manual access).
+                const score = response.data.score ?? response.data.credibilityScore ?? 100;
+                if (score < 70) {
+                    injectBanner(postElement, response.data);
+                } else {
+                    debugLog(`Post is credible (score: ${score}). Showing minimal indicator.`);
+                    injectRestoreIcon(postElement, response.data);
+                }
+                // Mark as processed to avoid re-scanning
+                postElement.dataset.truthlayerProcessed = "true";
             } else {
                 console.error('TruthLayer: Backend error', response?.error);
                 injectBanner(postElement, getDefaultAnalysis(text, response?.error));
