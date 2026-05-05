@@ -1,17 +1,79 @@
 const DEBUG_MODE = true;
+let fbPaused = false;
+let cachedDismissedPosts = {}; // Session-only dismissal cache
+
+// Load initial state
+chrome.storage.local.get(["fbPaused"], (data) => {
+    fbPaused = !!data.fbPaused;
+    if (fbPaused) removeAllPopups();
+});
+
+// Sync state
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.fbPaused) fbPaused = changes.fbPaused.newValue;
+});
+
+// Listen for toggle messages
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "TOGGLE_FB_PAUSE") {
+        fbPaused = msg.paused;
+        debugLog(`Toggle received: fbPaused = ${fbPaused}`);
+        
+        if (fbPaused) {
+            removeAllPopups();
+        } else {
+            debugLog('Resuming TruthLayer: Resetting all UI states.');
+            
+            // Clear session-only dismissals on resume
+            cachedDismissedPosts = {};
+            
+            clearProcessedFlags();
+            rehydrateUI(); 
+            initialScan(); 
+            runScan();     
+        }
+    }
+});
+
+function rehydrateUI() {
+    // Instantly restore full popups from session cache
+    const posts = document.querySelectorAll('[data-truthlayer-signature]');
+    let rehydratedCount = 0;
+    posts.forEach(post => {
+        if (post._truthlayerData && !post.querySelector('.truthlayer-floating-popup')) {
+            debugLog(`Rehydrating popup for signature: ${post.dataset.truthlayerSignature}`);
+            injectBanner(post, post._truthlayerData);
+            rehydratedCount++;
+        }
+    });
+    if (rehydratedCount > 0) debugLog(`Successfully re-injected ${rehydratedCount} popups.`);
+}
+
+function clearProcessedFlags() {
+    // Clear ALL flags to ensure a full re-evaluation
+    const elements = document.querySelectorAll('[data-truthlayer-processed], [data-truthlayer-signature], [data-truthlayer-dismissed]');
+    debugLog(`Clearing flags on ${elements.length} elements.`);
+    elements.forEach(el => {
+        delete el.dataset.truthlayerProcessed;
+        delete el.dataset.truthlayerSignature;
+        delete el.dataset.truthlayerDismissed;
+        // Also remove any restore icons as they will be replaced by popups
+        el.querySelectorAll('.truthlayer-restore-icon').forEach(icon => icon.remove());
+    });
+}
+
+function removeAllPopups() {
+    debugLog('Pausing: Removing all active popups.');
+    document.querySelectorAll('.truthlayer-floating-popup, .truthlayer-restore-icon').forEach(el => el.remove());
+}
+
+console.log('[TruthLayer] Content script loaded. Initializing...');
 
 function debugLog(...args) {
     if (DEBUG_MODE) {
-        //console.log('[TruthLayer Debug]', ...args);
+        console.log('[TruthLayer Debug]', ...args);
     }
 }
-
-// Minimal content script: intercept Share clicks, block the native flow,
-// and force a modal to appear on every share. The modal blocks until the
-// user chooses an action. On "Share Anyway" we re-dispatch the click and
-// allow the original behavior to proceed.
-
-console.log('TruthLayer share-only content script loaded.');
 
 function isShareNowTrigger(el) {
     if (!el) return null;
@@ -21,15 +83,12 @@ function isShareNowTrigger(el) {
 
     const tag = control.tagName && control.tagName.toLowerCase();
     const aria = (control.getAttribute && control.getAttribute('aria-label')) || '';
-        const selectors = [
-            'div[data-ad-rendering-role="profile_name"] a',
-            'div[data-ad-rendering-role="profile_name"] h4 a',
-            'h4 a',
-            'header h4 a',
-            'a[aria-label^="Hide post by"]',
-            'a[role="link"]',
-            'a'
-        ];
+    const dataTest = (control.getAttribute && control.getAttribute('data-testid')) || '';
+    const txt = (control.textContent || '').trim();
+
+    // Only accept the exact confirmation button inside the share dialog.
+    if (tag === 'button' && /^(share now)$/i.test(txt)) return control;
+
     if (tag === 'div' && /^(share now)$/i.test(txt)) return control;
     if (/^(share now)$/i.test(aria)) return control;
     if (/^(share now)$/i.test(dataTest)) return control;
@@ -363,22 +422,31 @@ function extractAuthor(postElement) {
     return null;
 }
 
-function highlightPost(element) {
-    if (DEBUG_MODE && element && !element.dataset.truthlayerHighlighted) {
-        element.style.border = '2px dashed red';
+function highlightPost(element, score = 100) {
+    if (DEBUG_MODE && element) {
+        // Only add border if score is low (HIGH likelihood of being fake)
+        if (score < 40) {
+            element.classList.add('truthlayer-danger-border');
+        } else {
+            element.classList.remove('truthlayer-danger-border');
+        }
         element.style.position = 'relative';
-        const label = document.createElement('div');
-        label.textContent = 'TL: Post Detected';
-        label.style.position = 'absolute';
-        label.style.top = '0';
-        label.style.right = '0';
-        label.style.background = 'red';
-        label.style.color = 'white';
-        label.style.fontSize = '10px';
-        label.style.padding = '2px 4px';
-        label.style.zIndex = '9999';
-        element.appendChild(label);
-        element.dataset.truthlayerHighlighted = 'true';
+        
+        // Add a debug label if not already present
+        if (!element.dataset.truthlayerHighlighted) {
+            const label = document.createElement('div');
+            label.textContent = 'TL: Post Detected';
+            label.style.position = 'absolute';
+            label.style.top = '0';
+            label.style.right = '0';
+            label.style.background = 'red';
+            label.style.color = 'white';
+            label.style.fontSize = '10px';
+            label.style.padding = '2px 4px';
+            label.style.zIndex = '9999';
+            // element.appendChild(label); // Disabled for cleaner UI but logic remains
+            element.dataset.truthlayerHighlighted = 'true';
+        }
     }
 }
 
@@ -446,111 +514,148 @@ function extractPostText(postElement) {
 }
 
 function detectPosts(rootNode = document) {
+    const host = window.location.hostname;
+    const path = window.location.pathname;
+
+    // 1. Block all Messenger domains and paths
+    if (host.includes('messenger.com')) return [];
+    if (
+        path.startsWith('/messages') ||   // /messages, /messages/t/, /messages/e2ee/
+        path.startsWith('/t/')            // legacy short messenger path
+    ) return [];
+
     const foundPosts = new Set();
 
-    // 1. Target known specific FB post structures
-    const selectors = [
-        '[role="article"]',
+    // 2. Tighter feed-only selectors
+    const postSelectors = [
         '[data-pagelet*="FeedUnit"]',
         '[data-pagelet*="GroupFeed"]',
         '[data-pagelet*="ProfileFeed"]',
-        '[data-pagelet*="MainFeed"]'
+        '[data-pagelet*="WatchFeed"]',
+        '[data-pagelet*="RightRail"]',     // Trending / suggested posts
+        '[data-ad-preview="message"]',
+        '[data-ad-comet-preview="message"]',
+        // Keep role="article" but ONLY when scoped inside a known feed pagelet
+        '[data-pagelet*="Feed"] [role="article"]',
+        '[data-pagelet*="feed"] [role="article"]',
     ];
 
-    selectors.forEach(sel => {
-        try {
-            const elements = rootNode.querySelectorAll(sel);
-            elements.forEach(el => {
-                if (!el.dataset.truthlayerProcessed) foundPosts.add(el);
-            });
-        } catch (e) { }
-    });
+    // 3. Comprehensive chat/messenger ancestor blocklist
+    function isInsideMessagingUI(el) {
+        // Fixed-position chat popup boxes Facebook injects at the bottom of the page
+        if (el.closest('[data-pagelet="ChatTab"]'))          return true;
+        if (el.closest('[data-pagelet^="ChatTab"]'))         return true;
+        if (el.closest('[data-testid="chat_tab"]'))          return true;
+        if (el.closest('[data-testid="messenger_chat"]'))    return true;
 
-    // 2. Structural heuristics (find elements containing Facebook's internal post roles)
-    const allDivs = rootNode.querySelectorAll('div');
-    allDivs.forEach(div => {
-        if (div.dataset.truthlayerProcessed) return;
+        // Messenger drawer / docked chat windows
+        if (el.closest('[aria-label="Messenger"]'))          return true;
+        if (el.closest('[aria-label="Messages"]'))           return true;
+        if (el.closest('[aria-label="Chat"]'))               return true;
+        if (el.closest('[role="complementary"]'))            return true;
 
-        // A FB post usually has a message body and interaction buttons
-        const hasMessage = div.querySelector('[data-ad-preview="message"], [data-ad-comet-preview="message"], [data-ad-rendering-role="story_message"]');
-        const hasLike = div.querySelector('[data-ad-rendering-role="like_button"], [aria-label="Like"]');
-        const hasComment = div.querySelector('[data-ad-rendering-role="comment_button"], [aria-label="Leave a comment"]');
-
-        if (hasMessage && (hasLike || hasComment)) {
-            // Check text length to ensure it's substantial
-            const text = hasMessage.innerText || hasMessage.textContent || '';
-            if (text.length > 20) {
-                if (isValidPost(div)) {
-                    foundPosts.add(div);
-                }
+        // Structural: fixed-position containers at the bottom-right are chat boxes
+        let node = el;
+        while (node && node !== document.body) {
+            const style = window.getComputedStyle(node);
+            if (style.position === 'fixed') {
+                // A fixed element that isn't a full-screen dialog is almost certainly chat
+                const rect = node.getBoundingClientRect();
+                const isFullScreen =
+                    rect.width  > window.innerWidth  * 0.8 &&
+                    rect.height > window.innerHeight * 0.8;
+                if (!isFullScreen) return true;
             }
-        }
-    });
-
-    // 3. Prevent Nesting & Duplication
-    const finalPosts = [];
-    const postsArray = Array.from(foundPosts);
-
-    for (let i = 0; i < postsArray.length; i++) {
-        let isParentOfAnother = false;
-
-        // Check if this post contains any other newly detected post
-        for (let j = 0; j < postsArray.length; j++) {
-            if (i === j) continue;
-            if (postsArray[i].contains(postsArray[j])) {
-                isParentOfAnother = true;
-                break;
-            }
+            node = node.parentElement;
         }
 
-        // Also check if it contains a previously processed post
-        if (!isParentOfAnother) {
-            if (postsArray[i].querySelector('[data-truthlayer-processed="true"]')) {
-                isParentOfAnother = true;
-            }
-        }
+        // Aria-label substring checks for comment/reply/message labels
+        const label = (el.getAttribute('aria-label') || '').toLowerCase();
+        if (/\b(chat|message|messenger|conversation|inbox)\b/.test(label)) return true;
 
-        // We only want the most specific (innermost) container to avoid the nested banners issue
-        if (!isParentOfAnother) {
-            // Also ensure it doesn't already have our banner from a previous run
-            if (!postsArray[i].querySelector('.truthlayer-banner')) {
-                finalPosts.push(postsArray[i]);
-            }
-        }
+        return false;
     }
 
+    postSelectors.forEach(selector => {
+        rootNode.querySelectorAll(selector).forEach(el => {
+            // Walk up to find the best post-root container
+            let container =
+                el.closest('[data-pagelet*="FeedUnit"]') ||
+                el.closest('[data-pagelet*="GroupFeed"]') ||
+                el.closest('[data-pagelet*="ProfileFeed"]') ||
+                el.closest('[data-pagelet*="WatchFeed"]') ||
+                el.closest('[role="article"]') ||
+                el;
+
+            if (!container) return;
+            if (container.dataset.truthlayerDismissed === 'true') return;
+
+            // Bail out if inside any messaging surface
+            if (isInsideMessagingUI(container)) return;
+
+            const text = container.innerText || '';
+            if (text.length < 50) return;
+
+            const signature =
+                text.length + '_' + text.substring(0, 30).replace(/\s/g, '');
+
+            if (
+                container.dataset.truthlayerProcessed === 'true' &&
+                container.dataset.truthlayerSignature === signature &&
+                container.querySelector('.truthlayer-floating-popup')
+            ) return;
+
+            container.dataset.truthlayerSignature = signature;
+            foundPosts.add(container);
+        });
+    });
+
+    const finalPosts = Array.from(foundPosts);
+    if (finalPosts.length > 0) debugLog(`Detected ${finalPosts.length} potential posts.`);
     return finalPosts;
 }
 
+
 function injectBanner(postElement, data) {
+    if (postElement.dataset.truthlayerDismissed === "true") return;
+    
     console.log('TruthLayer: Injecting banner with data:', data);
-    const { score, label, reasons } = data;
+    
+    const score = data.credibilityScore !== undefined ? data.credibilityScore : (data.score || 0);
+    const label = data.classification || data.label || 'Unknown';
+    const reasons = data.keyRiskIndicators || data.reasons || [];
 
-    let themeClass = 'truthlayer-low';
-    let icon = '✅';
+    // Apply conditional border logic
+    highlightPost(postElement, score);
+
+    let themeClass = 'truthlayer-badge-green';
+    let iconClass = 'safe';
     if (score < 50) {
-        themeClass = 'truthlayer-high';
-        icon = '🚨';
+        themeClass = 'truthlayer-badge-red';
+        iconClass = 'warning';
     } else if (score < 80) {
-        themeClass = 'truthlayer-medium';
-        icon = '⚠️';
+        themeClass = 'truthlayer-badge-yellow';
+        iconClass = 'caution';
     }
 
-    const banner = document.createElement('div');
-    banner.className = `truthlayer-banner truthlayer-popup ${themeClass}`;
+    const popup = document.createElement('div');
+    popup.className = 'truthlayer-floating-popup';
 
-    // Remove any existing banner (e.g. if the post was re-analyzed after clicking "See more")
-    const existing = postElement.querySelector('.truthlayer-banner');
-    if (existing) {
-        existing.remove();
-    }
+    // Remove any existing banner or restore icon
+    postElement.querySelectorAll('.truthlayer-floating-popup, .truthlayer-restore-icon, .truthlayer-banner').forEach(el => el.remove());
 
-    // Create Reasons HTML
-    const reasonsId = `reasons-${Date.now()}`;
+    // Save data to element for instant restoration
+    postElement._truthlayerData = data;
+
+    // Persist data and dismissal state
+    const text = postElement.innerText || "";
+    const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+    
+    // Reasons HTML
     let reasonsHtml = '';
     if (reasons && reasons.length > 0) {
         reasonsHtml = `
-            <div class="truthlayer-reasons" id="${reasonsId}">
+            <div class="truthlayer-popup-expandable">
                 <ul>
                     ${reasons.map(r => `<li>${r}</li>`).join('')}
                 </ul>
@@ -558,43 +663,109 @@ function injectBanner(postElement, data) {
         `;
     } else {
         reasonsHtml = `
-            <div class="truthlayer-reasons" id="${reasonsId}">
-                <p style="margin: 0;">No significant risks detected.</p>
+            <div class="truthlayer-popup-expandable">
+                <p style="margin: 0; padding-left: 10px;">No significant risks detected.</p>
             </div>
         `;
     }
 
-    banner.innerHTML = `
-        <div class="truthlayer-header">
-            <div class="truthlayer-title">
-                ${icon} TruthLayer: ${label}
-            </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div class="truthlayer-score">Score: ${score}/100</div>
-                <button class="truthlayer-toggle">Why?</button>
-            </div>
+    popup.innerHTML = `
+        <div class="truthlayer-popup-close">×</div>
+        <div class="truthlayer-popup-header">
+            <svg class="truthlayer-popup-icon ${iconClass}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span class="truthlayer-popup-score-text">Credibility Score: ${score}</span>
+        </div>
+        <div class="truthlayer-popup-badge ${themeClass}">
+            ${label}
+        </div>
+        <div class="truthlayer-popup-actions">
+            <button class="truthlayer-popup-btn truthlayer-btn-why">Why?</button>
+            <button class="truthlayer-popup-btn truthlayer-btn-sources">Sources ↗</button>
         </div>
         ${reasonsHtml}
     `;
 
-    const toggleBtn = banner.querySelector('.truthlayer-toggle');
-    const reasonsDiv = banner.querySelector('.truthlayer-reasons');
+    const btnClose = popup.querySelector('.truthlayer-popup-close');
+    const btnWhy = popup.querySelector('.truthlayer-btn-why');
+    const btnSources = popup.querySelector('.truthlayer-btn-sources');
+    const expandable = popup.querySelector('.truthlayer-popup-expandable');
 
-    toggleBtn.addEventListener('click', (e) => {
+    btnClose.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (reasonsDiv.classList.contains('open')) {
-            reasonsDiv.classList.remove('open');
-            toggleBtn.textContent = 'Why?';
-        } else {
-            reasonsDiv.classList.add('open');
-            toggleBtn.textContent = 'Hide';
-        }
+        debugLog(`Popup closed via X for signature: ${signature}. Session dismissal only.`);
+        popup.remove();
+        postElement.classList.remove('truthlayer-danger-border');
+        postElement.dataset.truthlayerDismissed = "true";
+        
+        // Track in-memory ONLY for current page session
+        cachedDismissedPosts[signature] = data;
+
+        injectRestoreIcon(postElement, data);
     });
 
-    // Inject into DOM (at the top of the post)
-    postElement.insertBefore(banner, postElement.firstChild);
+    btnWhy.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (expandable.classList.contains('open')) {
+            expandable.classList.remove('open');
+            btnWhy.textContent = 'Why?';
+        } else {
+            expandable.classList.add('open');
+            btnWhy.textContent = 'Hide';
+        }
+    });
+    
+    btnSources.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        alert("Sources verification feature coming soon.");
+    });
 
+    // Inject into DOM
+    postElement.appendChild(popup);
+
+    const currentPosition = window.getComputedStyle(postElement).position;
+    if (!currentPosition || currentPosition === 'static') {
+        postElement.style.position = 'relative';
+    }
+    debugLog('Popup successfully injected into post element.');
+}
+
+function injectRestoreIcon(postElement, data) {
+    // Remove any existing
+    const existing = postElement.querySelector('.truthlayer-restore-icon');
+    if (existing) existing.remove();
+
+    const icon = document.createElement('div');
+    icon.className = 'truthlayer-restore-icon';
+    icon.innerHTML = 'ⓘ';
+    icon.title = 'Restore TruthLayer Analysis';
+
+    icon.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        icon.remove();
+        
+        // Clear dismissal state on the element so it can be re-processed
+        delete postElement.dataset.truthlayerDismissed;
+        
+        // Remove from dismissed storage
+        const text = postElement.innerText || "";
+        const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+        chrome.storage.local.get("dismissedPosts", (res) => {
+            const dismissed = res.dismissedPosts || {};
+            delete dismissed[signature];
+            chrome.storage.local.set({ dismissedPosts: dismissed });
+        });
+
+        injectBanner(postElement, data);
+    });
+
+    postElement.appendChild(icon);
+    
     const currentPosition = window.getComputedStyle(postElement).position;
     if (!currentPosition || currentPosition === 'static') {
         postElement.style.position = 'relative';
@@ -609,8 +780,20 @@ function getDefaultAnalysis(text, errorMsg) {
     };
 }
 
+
 async function processPost(postElement) {
-    if (postElement.dataset.truthlayerProcessed === "true") return;
+    if (fbPaused) return;
+
+    if (postElement.dataset.truthlayerProcessed === "true") {
+        // If already processed but has no UI, check if it's because it was dismissed
+        const text = postElement.innerText || "";
+        const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+        
+        if (cachedDismissedPosts[signature] && !postElement.querySelector('.truthlayer-restore-icon')) {
+            injectRestoreIcon(postElement, cachedDismissedPosts[signature]);
+        }
+        return;
+    }
 
     let text = extractTextFromPost(postElement);
     const author = extractAuthor(postElement);
@@ -622,6 +805,8 @@ async function processPost(postElement) {
 
     // Mark as processed immediately to avoid duplicate network calls
     postElement.dataset.truthlayerProcessed = "true";
+    const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+    postElement.dataset.truthlayerSignature = signature;
 
     debugLog('Processing post. Extracted text length:', text.length);
     highlightPost(postElement);
@@ -673,6 +858,7 @@ async function processPost(postElement) {
     }
 }
 
+
 function debounce(func, wait) {
     let timeout;
     return function (...args) {
@@ -681,15 +867,21 @@ function debounce(func, wait) {
         timeout = setTimeout(() => func.apply(context, args), wait);
     };
 }
-
 const runScan = debounce(async () => {
+    if (fbPaused) {
+        debugLog('Scan skipped: Extension is paused.');
+        return;
+    }
     debugLog('Running batched DOM scan...');
     const posts = detectPosts();
-    debugLog(`Detected ${posts.length} new posts.`);
+    debugLog(`Found ${posts.length} potential posts to process.`);
 
+    let count = 0;
     for (const post of posts) {
         await processPost(post);
+        count++;
     }
+    if (count > 0) debugLog(`Re-processed ${count} posts.`);
 }, 500);
 
 function observeDOM() {
@@ -715,10 +907,12 @@ function observeDOM() {
     observer.observe(document.body, { childList: true, subtree: true });
 }
 
-console.log("TruthLayer extension loaded (Heuristics V3).");
+console.log("[TruthLayer] State reset: New page session detected.");
 
 function initialScan() {
     const posts = detectPosts();
+    debugLog(`Initial scan: Reprocessing ${posts.length} visible posts.`);
+
     posts.forEach(processPost);
 }
 
