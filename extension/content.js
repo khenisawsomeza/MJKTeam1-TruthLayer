@@ -676,6 +676,29 @@ function detectPosts(rootNode = document) {
         '[data-pagelet*="feed"] [role="article"]',
     ];
 
+    // 2.5 Add permalink-specific selectors if on a single-post page
+    // 2.5 Add permalink-specific selectors if on a single-post page
+    const isPermalinkPage = 
+        path.includes('/posts/') || 
+        path.includes('/photo') || 
+        path.includes('/videos/') || 
+        path.includes('/permalink/') ||
+        path.includes('/reel/') ||
+        window.location.search.includes('fbid=');
+
+    if (isPermalinkPage) {
+        postSelectors.push('div[data-pagelet*="permalink"]');
+        postSelectors.push('div[data-pagelet*="Permalink"]');
+        postSelectors.push('div[data-pagelet*="Media"]');
+        postSelectors.push('div[data-pagelet*="Photo"]');
+        postSelectors.push('div[data-pagelet*="Biz"]');
+        postSelectors.push('div[data-testid="post_message"]');
+        postSelectors.push('div[data-ad-preview="message"]');
+        postSelectors.push('[aria-posinset]');
+        // Add role="article" as a fallback ONLY on permalink pages
+        postSelectors.push('[role="article"]'); 
+    }
+
     // 3. Comprehensive chat/messenger ancestor blocklist
     function isInsideMessagingUI(el) {
         // Fixed-position chat popup boxes Facebook injects at the bottom of the page
@@ -688,7 +711,13 @@ function detectPosts(rootNode = document) {
         if (el.closest('[aria-label="Messenger"]'))          return true;
         if (el.closest('[aria-label="Messages"]'))           return true;
         if (el.closest('[aria-label="Chat"]'))               return true;
-        if (el.closest('[role="complementary"]'))            return true;
+        // Only block role="complementary" (sidebars) if it's clearly for messaging
+        const comp = el.closest('[role="complementary"]');
+        if (comp) {
+            const label = (comp.getAttribute('aria-label') || '').toLowerCase();
+            if (/\b(chat|message|messenger|conversation|inbox)\b/.test(label)) return true;
+            // Otherwise, it might be a post info sidebar on a permalink page, so don't block.
+        }
 
         // Structural: fixed-position containers at the bottom-right are chat boxes
         let node = el;
@@ -712,6 +741,34 @@ function detectPosts(rootNode = document) {
         return false;
     }
 
+    function isInsideCommentSection(el) {
+        // 1. Explicit comment roles/ids
+        if (el.closest('[data-testid*="comment"]')) return true;
+        if (el.closest('[data-ad-rendering-role="comment"]')) return true;
+        if (el.hasAttribute('data-comment-id')) return true;
+        
+        // 2. Comment list containers
+        if (el.closest('[data-testid="comment_list"]')) return true;
+        if (el.closest('[data-testid="UFI2CommentsList/root_depth_0"]')) return true;
+        if (el.closest('[role="list"] [role="article"]')) {
+            // If it's an article INSIDE a list, and we are not on the main feed, it's likely a comment
+            if (!el.closest('[data-pagelet*="Feed"]')) return true;
+        }
+
+        // 3. Sidebars that are not post-specific
+        if (el.closest('[role="complementary"]') && !isPermalinkPage) return true;
+        
+        // 4. Nested articles (comments are often articles inside articles)
+        const articleAncestor = el.parentElement?.closest('[role="article"]');
+        if (articleAncestor) return true;
+
+        // 5. Explicit "Comment" labels
+        const label = (el.getAttribute('aria-label') || '').toLowerCase();
+        if (label.includes('comment') || label.includes('reply')) return true;
+
+        return false;
+    }
+
     postSelectors.forEach(selector => {
         rootNode.querySelectorAll(selector).forEach(el => {
             // Walk up to find the best post-root container
@@ -720,17 +777,23 @@ function detectPosts(rootNode = document) {
                 el.closest('[data-pagelet*="GroupFeed"]') ||
                 el.closest('[data-pagelet*="ProfileFeed"]') ||
                 el.closest('[data-pagelet*="WatchFeed"]') ||
+                el.closest('div[data-pagelet*="permalink"]') ||
+                el.closest('div[data-pagelet*="Permalink"]') ||
+                el.closest('[aria-posinset]') ||
                 el.closest('[role="article"]') ||
                 el;
 
             if (!container) return;
             if (container.dataset.truthlayerDismissed === 'true') return;
 
-            // Bail out if inside any messaging surface
+            // Bail out if inside any messaging surface or comment section
             if (isInsideMessagingUI(container)) return;
+            if (isInsideCommentSection(container)) return;
 
             const text = container.innerText || '';
-            if (text.length < 50) return;
+            // For permalink pages, we are much more lenient with text length
+            const minLength = isPermalinkPage ? 20 : 50;
+            if (text.length < minLength) return;
 
             const signature =
                 text.length + '_' + text.substring(0, 30).replace(/\s/g, '');
