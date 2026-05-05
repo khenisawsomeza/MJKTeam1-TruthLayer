@@ -758,9 +758,17 @@ function detectPosts(rootNode = document) {
         // 3. Sidebars that are not post-specific
         if (el.closest('[role="complementary"]') && !isPermalinkPage) return true;
         
-        // 4. Nested articles (comments are often articles inside articles)
+        // 4. Nested articles 
+        // Comments are often articles inside articles, but so are reshared posts.
+        // We only block if we are deep inside a list or have explicit comment markers.
         const articleAncestor = el.parentElement?.closest('[role="article"]');
-        if (articleAncestor) return true;
+        if (articleAncestor) {
+            if (isPermalinkPage) return false;
+            // If the ancestor is a feed unit, then this "nested" article is likely the shared content.
+            if (articleAncestor.closest('[data-pagelet*="Feed"]')) return false; 
+            // Otherwise, if it's inside a generic list, it's probably a comment.
+            if (el.closest('[role="list"]')) return true;
+        }
 
         // 5. Explicit "Comment" labels
         const label = (el.getAttribute('aria-label') || '').toLowerCase();
