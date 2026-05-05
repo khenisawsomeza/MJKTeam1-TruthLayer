@@ -61,7 +61,7 @@ def calculate_rule_score(text: str) -> tuple[float, List[str]]:
     # Rule 3: Multiple ALL CAPS words
     words = text.split()
     all_caps_words = [w for w in words if w.isupper() and len(w) > 2]
-    if len(all_caps_words) >= 2:
+    if len(all_caps_words) >= 15:
         score -= 12
         reasons.append(f"Multiple ALL CAPS words detected")
     
