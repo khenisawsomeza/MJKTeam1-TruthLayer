@@ -42,6 +42,33 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Compact mode for Facebook toggle */
+body.compact-mode {
+  width: 320px;
+  min-height: 0;
+}
+
+body.compact-mode .popup-header {
+  display: block;
+  padding: 12px 16px 10px;
+}
+
+body.compact-mode .header-logo {
+  width: 30px;
+  height: 30px;
+  padding: 2px;
+  border-radius: 8px;
+}
+
+body.compact-mode .header-title {
+  font-size: 16px;
+}
+
+body.compact-mode .popup-settings {
+  padding: 12px 16px;
+  border-top: none;
+}
+
 .hidden {
   display: none !important;
 }
@@ -93,8 +120,17 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
 }
 
 .status-text {
@@ -255,20 +291,20 @@ body {
   height: 10px;
   border-radius: 5px;
   background: linear-gradient(to right,
-    #e74c3c 0%,
-    #e74c3c 25%,
-    #e67e22 25%,
-    #e67e22 45%,
-    #f1c40f 45%,
-    #f1c40f 65%,
-    #2ecc71 65%,
-    #27ae60 100%
-  );
+      #e74c3c 0%,
+      #e74c3c 25%,
+      #e67e22 25%,
+      #e67e22 45%,
+      #f1c40f 45%,
+      #f1c40f 65%,
+      #2ecc71 65%,
+      #27ae60 100%);
   overflow: visible;
 }
 
 .score-bar-fill {
-  display: none; /* We use indicator instead */
+  display: none;
+  /* We use indicator instead */
 }
 
 .score-bar-indicator {
@@ -297,8 +333,13 @@ body {
   font-weight: 600;
 }
 
-.bar-label-low { color: var(--accent-red); }
-.bar-label-high { color: var(--accent-green); }
+.bar-label-low {
+  color: var(--accent-red);
+}
+
+.bar-label-high {
+  color: var(--accent-green);
+}
 
 /* ---- Risk Indicators ---- */
 .risk-card {
@@ -322,11 +363,25 @@ body {
   animation: fadeIn 0.3s ease backwards;
 }
 
-.risk-list li:nth-child(1) { animation-delay: 0.1s; }
-.risk-list li:nth-child(2) { animation-delay: 0.2s; }
-.risk-list li:nth-child(3) { animation-delay: 0.3s; }
-.risk-list li:nth-child(4) { animation-delay: 0.4s; }
-.risk-list li:nth-child(5) { animation-delay: 0.5s; }
+.risk-list li:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.risk-list li:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.risk-list li:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.risk-list li:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+.risk-list li:nth-child(5) {
+  animation-delay: 0.5s;
+}
 
 .risk-icon {
   width: 28px;
@@ -409,9 +464,17 @@ body {
   font-weight: 700;
 }
 
-.source-value.src-low { color: var(--accent-red); }
-.source-value.src-medium { color: var(--accent-orange); }
-.source-value.src-high { color: var(--accent-green); }
+.source-value.src-low {
+  color: var(--accent-red);
+}
+
+.source-value.src-medium {
+  color: var(--accent-orange);
+}
+
+.source-value.src-high {
+  color: var(--accent-green);
+}
 
 .source-note {
   display: flex;
@@ -515,9 +578,17 @@ body {
   animation: shimmer 1.5s infinite;
 }
 
-.shimmer-long { width: 90%; }
-.shimmer-medium { width: 65%; }
-.shimmer-short { width: 40%; }
+.shimmer-long {
+  width: 90%;
+}
+
+.shimmer-medium {
+  width: 65%;
+}
+
+.shimmer-short {
+  width: 40%;
+}
 
 .shimmer-bar {
   height: 10px;
@@ -529,8 +600,13 @@ body {
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ---- Error State ---- */
@@ -571,18 +647,135 @@ body {
 
 /* ---- Animations ---- */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.state-results > * {
+.state-results>* {
   animation: fadeIn 0.35s ease backwards;
 }
 
-.state-results > *:nth-child(1) { animation-delay: 0.05s; }
-.state-results > *:nth-child(2) { animation-delay: 0.12s; }
-.state-results > *:nth-child(3) { animation-delay: 0.19s; }
-.state-results > *:nth-child(4) { animation-delay: 0.26s; }
-.state-results > *:nth-child(5) { animation-delay: 0.33s; }
-.state-results > *:nth-child(6) { animation-delay: 0.40s; }
-.state-results > *:nth-child(7) { animation-delay: 0.47s; }
+.state-results>*:nth-child(1) {
+  animation-delay: 0.05s;
+}
+
+.state-results>*:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.state-results>*:nth-child(3) {
+  animation-delay: 0.19s;
+}
+
+.state-results>*:nth-child(4) {
+  animation-delay: 0.26s;
+}
+
+.state-results>*:nth-child(5) {
+  animation-delay: 0.33s;
+}
+
+.state-results>*:nth-child(6) {
+  animation-delay: 0.40s;
+}
+
+.state-results>*:nth-child(7) {
+  animation-delay: 0.47s;
+}
+
+/* ---- Settings Section ---- */
+.popup-settings {
+  background: white;
+  border-top: 1px solid var(--border-card);
+  padding: 16px 20px;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ---- Toggle Switch ---- */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e2e8f0;
+  transition: .3s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+input:checked+.slider {
+  background-color: var(--accent-blue);
+}
+
+input:focus+.slider {
+  box-shadow: 0 0 1px var(--accent-blue);
+}
+
+input:checked+.slider:before {
+  transform: translateX(20px);
+}
+
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
