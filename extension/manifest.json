@@ -5,7 +5,8 @@
   "description": "Click to analyze any article's credibility with AI-powered fake news detection.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"
