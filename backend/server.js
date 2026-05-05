@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const scoring = require('./scoring');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,7 +13,7 @@ app.use(express.json());
 
 app.post('/analyze', async (req, res) => {
     try {
-        const { text, content, url } = req.body;
+        const { text, content, url, source, platform } = req.body;
         const articleText = text || content;
         
         if (!articleText) {
@@ -20,27 +21,79 @@ app.post('/analyze', async (req, res) => {
         }
 
         console.log(`Analyzing: ${url || 'no URL'} (${articleText.length} chars)`);
+        if (source) {
+            console.log(`Source detected: ${source.name || source.url || 'unknown'}`);
+        }
 
-        // Forward request to Python AI Service
-        const response = await axios.post(AI_SERVICE_URL, { text: articleText });
-        
-        // Return AI response to the extension
-        res.json(response.data);
+        // 1. Local Rule-based analysis
+        const ruleResult = scoring.rules.analyze(articleText);
+
+        // 2. Local Source analysis
+        const sourceResult = scoring.sourceChecker.getSourceScore(source || { url, platform });
+
+        // 3. AI Service analysis (ML)
+        let aiResult = null;
+        try {
+            const response = await axios.post(AI_SERVICE_URL, { text: articleText });
+            aiResult = response.data;
+        } catch (aiError) {
+            console.error("AI Service unavailable, using local fallback");
+        }
+
+        // 4. Aggregate results
+        const aggregated = scoring.aggregator.aggregate({
+            ruleScore: ruleResult.score,
+            mlScore: aiResult ? aiResult.score : 50,
+            sourceScore: sourceResult.score,
+            mlConfidence: aiResult ? aiResult.confidence : 0.1
+        });
+
+        // 5. Generate human-readable explanation
+        const explanation = scoring.explainer.generate({
+            finalScore: aggregated.finalScore,
+            confidence: aggregated.confidence,
+            label: scoring.aggregator.determineLabel(aggregated.finalScore, aggregated.confidence),
+            breakdown: aggregated.breakdown,
+            ruleReasons: ruleResult.reasons,
+            mlExplanation: aiResult ? aiResult.reasons[aiResult.reasons.length - 1] : 'AI analysis unavailable',
+            sourceReason: sourceResult.reason
+        });
+
+        // Final response structure (enriched for extension)
+        const finalResponse = {
+            success: true,
+            score: aggregated.finalScore,
+            credibilityScore: aggregated.finalScore,
+            label: explanation.label,
+            classification: explanation.label,
+            confidence: aggregated.confidence,
+            reasons: explanation.summary.split(' | '),
+            keyRiskIndicators: scoring.explainer.extractKeyFindings(explanation),
+            narrative: explanation.narrative,
+            sourceInfo: sourceResult,
+            breakdown: aggregated.breakdown
+        };
+
+        res.json(finalResponse);
 
     } catch (error) {
-        console.error("Error communicating with AI service:", error.message);
+        console.error("Error in analysis pipeline:", error.message);
         
-        // Fallback response if Python service is down (still return 200 so extension can display it)
         res.json({
+            success: false,
             score: 50,
+            credibilityScore: 50,
             label: "Unable to Verify",
             reasons: [
-                "AI scoring service is offline.",
-                "Could not perform full credibility analysis.",
-                "Treat this content with caution until verified."
+                "Analysis pipeline encountered an error.",
+                error.message
             ]
         });
     }
+});
+
+app.get('/version', (req, res) => {
+    res.json({ version: '1.1.0' });
 });
 
 app.listen(PORT, () => {

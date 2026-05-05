@@ -384,42 +384,178 @@ function extractTextFromPost(postElement) {
     return visible || null;
 }
 
+// ---------------------------------------------------------------------------
+// extractAuthor() — 4-tier page name extraction
+//
+// Tier 1: data-ad-rendering-role="profile_name"  (Facebook internal semantic marker)
+// Tier 2: Heading (<h3>/<h4>) + role="link" anchor
+// Tier 3: aria-label="..., view story" on the avatar/story link
+// Tier 4: Any facebook.com profile link (broad fallback)
+//
+// Returns: { name: string, url: string|null, anchorEl: Element|null }
+//   anchorEl is passed internally so processPost() can read the verified badge
+//   without running a second querySelector pass.
+// ---------------------------------------------------------------------------
 function extractAuthor(postElement) {
     if (!postElement) return null;
 
-    // Broadened selectors to match multiple FB DOM variants
-    const selectors = [
-        'div[data-ad-rendering-role="profile_name"] a',
-        'div[data-ad-rendering-role="profile_name"] h4 a',
-        'h4 a',
-        'header h4 a',
-        'a[aria-label^="Hide post by"]',
-        'a[role="link"]',
-        'a'
+    // ── SCOPE RESOLUTION ────────────────────────────────────────────────────
+    // When detectPosts() lands on a message-body element (e.g. the div with
+    // data-ad-preview="message"), the header section — which contains
+    // profile_name, h3, and the avatar link — is a sibling/ancestor, NOT a
+    // descendant.  We therefore walk upward to find the nearest ancestor that
+    // actually contains a profile_name div (or any author-bearing structure),
+    // giving every tier below a full-post search scope.
+    const searchRoot = resolveAuthorSearchRoot(postElement);
+
+    // ── TIER 1: data-ad-rendering-role="profile_name" ───────────────────────
+    // Present on both sponsored AND organic posts in the Comet renderer.
+    const profileNameDiv = searchRoot.querySelector(
+        'div[data-ad-rendering-role="profile_name"]'
+    );
+    if (profileNameDiv) {
+        const anchor = profileNameDiv.querySelector('a[role="link"]') ||
+                       profileNameDiv.querySelector('a');
+        if (anchor) {
+            const name = cleanAuthorName(
+                anchor.innerText || anchor.textContent || ''
+            );
+            if (isValidAuthorName(name)) {
+                return buildAuthorResult(name, anchor);
+            }
+        }
+    }
+
+    // ── TIER 2 (Organic posts): <strong> / <h2> author link ────────────────
+    const organicSelectors = [
+        'strong a[role="link"]',
+        'strong > a',
+        'h2 strong a[role="link"]',
+        'h2 strong a',
+        'h2 a[role="link"]',
+        'h2 a',
     ];
-
-    for (const sel of selectors) {
-        const el = postElement.querySelector(sel);
+    for (const sel of organicSelectors) {
+        const el = searchRoot.querySelector(sel);
         if (!el) continue;
+        const name = cleanAuthorName(el.innerText || el.textContent || '');
+        if (isValidAuthorName(name)) return buildAuthorResult(name, el);
+    }
 
-        // Prefer visible text
-        let name = (el.innerText || el.textContent || '').trim();
-        if (!name) {
-            // try alt/title attributes or aria-label
-            name = el.getAttribute('title') || el.getAttribute('aria-label') || '';
-            name = name.trim();
-        }
+    // ── TIER 3: h3 / h4 heading-anchored link ──────────────────────────────
+    const headingSelectors = [
+        'h3 a[role="link"]',
+        'h4 a[role="link"]',
+        'h3 a',
+        'h4 a',
+    ];
+    for (const sel of headingSelectors) {
+        const el = searchRoot.querySelector(sel);
+        if (!el) continue;
+        const name = cleanAuthorName(el.innerText || el.textContent || '');
+        if (isValidAuthorName(name)) return buildAuthorResult(name, el);
+    }
 
-        let url = el.getAttribute('href') || el.getAttribute('data-href') || null;
-        if (url) {
-            // resolve relative URLs
-            try { url = new URL(url, window.location.href).href; } catch (e) { /* leave as-is */ }
-        }
+    // ── TIER 4: aria-label on avatar / story link ──────────────────────────
+    const storyLink = searchRoot.querySelector('a[aria-label*="view story"]');
+    if (storyLink) {
+        const rawLabel = storyLink.getAttribute('aria-label') || '';
+        const name = cleanAuthorName(
+            rawLabel.replace(/,?\s*view story$/i, '')
+        );
+        if (isValidAuthorName(name)) return buildAuthorResult(name, storyLink);
+    }
 
-        if (name) return { name, url };
+    // ── TIER 5: Any facebook.com profile link (broadest fallback) ──────────
+    const fbLinks = searchRoot.querySelectorAll(
+        'a[href*="facebook.com/"]:not([href*="facebook.com/l.php"])' +
+        ':not([href*="/photo/"]):not([href*="/videos/"]):not([href*="/posts/"])'
+    );
+    for (const link of fbLinks) {
+        const name = cleanAuthorName(link.innerText || link.textContent || '');
+        if (isValidAuthorName(name)) return buildAuthorResult(name, link);
     }
 
     return null;
+}
+
+/**
+ * Walk upward from the detected post element to find the nearest ancestor
+ * that contains a profile_name div (or any author signal).
+ *
+ * This is necessary because detectPosts() sometimes lands on the message-body
+ * container (data-ad-preview="message"), while the author header is a sibling
+ * further up the DOM tree.
+ *
+ * We walk up at most 8 levels to avoid escaping the post boundary.
+ */
+function resolveAuthorSearchRoot(el) {
+    let node = el;
+    for (let i = 0; i < 8; i++) {
+        if (!node.parentElement) break;
+        const parent = node.parentElement;
+        // Stop if this ancestor already contains a profile_name or an avatar link
+        if (
+            parent.querySelector('div[data-ad-rendering-role="profile_name"]') ||
+            parent.querySelector('a[aria-label*="view story"]')
+        ) {
+            return parent;
+        }
+        node = parent;
+    }
+    // Fall back to the original element if no wider scope was found
+    return el;
+}
+
+/**
+ * Strip emojis, UI noise, timestamps, and excess whitespace from a candidate
+ * page name string so the value passed to the scoring pipeline is clean.
+ */
+function cleanAuthorName(raw) {
+    if (!raw) return '';
+    return raw
+        // Remove emoji/special Unicode (Emoji ranges)
+        .replace(/[\u{1F300}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '')
+        // Strip verified-badge unicode characters Facebook sometimes inlines
+        .replace(/[\u2713\u2714\u2705\u2611\u2714\uFE0F]/g, '')
+        // Collapse whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * Accept a name as a valid page/author name.
+ * Rejects UI labels, pure numbers, timestamps, and overly long strings.
+ */
+function isValidAuthorName(name) {
+    if (!name || name.length < 2 || name.length > 80) return false;
+
+    const IGNORE_EXACT = new Set([
+        'follow', 'like', 'comment', 'share', 'send', 'reply',
+        'sponsored', 'suggested for you', 'public', 'just now',
+        'see more', 'see translation', 'edited'
+    ]);
+    const lower = name.toLowerCase();
+    if (IGNORE_EXACT.has(lower)) return false;
+
+    // Reject bare timestamps: "1m", "2h", "3d", "1.2K", "131", etc.
+    if (/^\d+(\.\d+)?[smhkKdM]?$/.test(name)) return false;
+
+    return true;
+}
+
+/**
+ * Build the author result object.
+ * anchorEl is kept on the object so the caller can interrogate it
+ * (e.g. to check for verified-badge SVG) without a second querySelector.
+ */
+function buildAuthorResult(name, anchorEl) {
+    let url = anchorEl?.getAttribute('href') ||
+              anchorEl?.getAttribute('data-href') || null;
+    if (url) {
+        try { url = new URL(url, window.location.href).href; } catch (e) { url = null; }
+    }
+    return { name, url, anchorEl };
 }
 
 function highlightPost(element, score = 100) {
@@ -816,17 +952,35 @@ async function processPost(postElement) {
         console.log('TruthLayer detected author/page:', author.name, author.url || 'no url');
     }
 
+    // Determine verified status from the anchor element already found by
+    // extractAuthor() — avoids a redundant querySelector pass on the post.
+    // Falls back to a broad SVG title search if the anchor is unavailable.
+    const verifiedBadgeInAnchor = author?.anchorEl
+        ? !!author.anchorEl.closest('[data-ad-rendering-role="profile_name"]')
+              ?.querySelector('svg[title="Verified account"], svg[aria-label="Verified account"]')
+        : false;
+    const verifiedBadgeFallback = !verifiedBadgeInAnchor && (
+        !!postElement.querySelector(
+            'div[data-ad-rendering-role="profile_name"] svg[title="Verified account"],' +
+            'div[data-ad-rendering-role="profile_name"] svg[aria-label="Verified account"]'
+        )
+    );
+    const isVerified = verifiedBadgeInAnchor || verifiedBadgeFallback;
+
     try {
         chrome.runtime.sendMessage({
             type: 'ANALYZE_CONTENT',
             content: text,
             url: window.location.href,
             platform: 'facebook',
-            author,
+            // Strip anchorEl before sending — DOM elements cannot be serialised
+            // across the extension messaging boundary.
+            author: author ? { name: author.name, url: author.url } : null,
             source: author ? {
                 name: author.name,
                 url: author.url,
-                platform: 'facebook'
+                platform: 'facebook',
+                isVerified
             } : {
                 url: window.location.href,
                 platform: 'facebook'
