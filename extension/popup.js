@@ -40,6 +40,10 @@ const sourceCredibility = document.getElementById("source-credibility");
 
 // Buttons
 const btnFullAnalysis = document.getElementById("btn-full-analysis");
+const SCORE_THRESHOLDS = {
+  lowMax: 40,
+  highMin: 70,
+};
 
 // ---- Risk icon mapping ----
 const RISK_ICONS = [
@@ -93,13 +97,49 @@ function showError(title, message) {
   showState("error");
 }
 
+function normalizeReason(reason) {
+  if (typeof reason !== "string") return "";
+  return reason.replace(/^(External AI:\s*)+/i, "External AI: ").trim();
+}
+
+function normalizeReasons(reasons) {
+  if (!Array.isArray(reasons)) return [];
+  return reasons
+    .map((reason) => normalizeReason(reason))
+    .filter((reason) => reason.length > 0);
+}
+
+function getScoreStage(score) {
+  if (score >= SCORE_THRESHOLDS.highMin) {
+    return {
+      label: "Likely Credible",
+      className: "verdict-high",
+      borderColor: "#27ae60",
+    };
+  }
+
+  if (score <= SCORE_THRESHOLDS.lowMax) {
+    return {
+      label: "Low Credibility",
+      className: "verdict-low",
+      borderColor: "#e74c3c",
+    };
+  }
+
+  return {
+    label: "Needs Verification",
+    className: "verdict-medium",
+    borderColor: "#e8c547",
+  };
+}
+
 // ---- Render Article Preview ----
 function renderArticle(pageTitle, pageDomain, contentSnippet) {
   articleTitle.textContent = pageTitle || "Untitled Page";
   articleDomain.textContent = pageDomain || "unknown";
   articleSummary.textContent = contentSnippet
     ? contentSnippet.substring(0, 180) +
-      (contentSnippet.length > 180 ? "…" : "")
+    (contentSnippet.length > 180 ? "…" : "")
     : "No preview available.";
 }
 
@@ -114,30 +154,19 @@ function renderScore(score) {
   }, 200);
 
   // Verdict badge
-  let verdictText = "Needs Verification";
-  let verdictClass = "verdict-medium";
-  let borderColor = "#e8c547";
+  const stage = getScoreStage(score);
 
-  if (score >= 70) {
-    verdictText = "Likely Credible";
-    verdictClass = "verdict-high";
-    borderColor = "#27ae60";
-  } else if (score < 40) {
-    verdictText = "Low Credibility";
-    verdictClass = "verdict-low";
-    borderColor = "#e74c3c";
-  }
-
-  verdictBadge.textContent = verdictText;
-  verdictBadge.className = "verdict-badge " + verdictClass;
-  scoreCard.style.borderColor = borderColor;
+  verdictBadge.textContent = stage.label;
+  verdictBadge.className = "verdict-badge " + stage.className;
+  scoreCard.style.borderColor = stage.borderColor;
 }
 
 // ---- Render Risk Indicators ----
 function renderRisks(reasons) {
+  const normalizedReasons = normalizeReasons(reasons);
   riskList.innerHTML = "";
 
-  if (!reasons || reasons.length === 0) {
+  if (normalizedReasons.length === 0) {
     const li = document.createElement("li");
     li.innerHTML = `
       <span class="risk-icon icon-green">✅</span>
@@ -147,7 +176,7 @@ function renderRisks(reasons) {
     return;
   }
 
-  reasons.forEach((reason) => {
+  normalizedReasons.forEach((reason) => {
     const li = document.createElement("li");
 
     // Find matching icon
@@ -171,12 +200,14 @@ function renderRisks(reasons) {
 
 // ---- Render Emotional Manipulation Warning ----
 function renderEmotionalWarning(reasons) {
-  if (!reasons || reasons.length === 0) {
+  const normalizedReasons = normalizeReasons(reasons);
+
+  if (normalizedReasons.length === 0) {
     warningCard.classList.add("hidden");
     return;
   }
 
-  const reasonsText = reasons.join(" ");
+  const reasonsText = normalizedReasons.join(" ");
   const triggers = new Set();
 
   EMOTION_PATTERNS.forEach((ep) => {
@@ -198,11 +229,11 @@ function renderEmotionalWarning(reasons) {
 // ---- Render Full Results ----
 function renderResults(data, pageTitle, pageDomain, contentSnippet) {
   console.log("TruthLayer: Rendering results", data);
-  
+
   // Handle different potential field names from AI service
   const score = data.score ?? data.credibility_score ?? 50;
-  const reasons = data.reasons ?? data.explanation ?? [];
-  const label = data.label ?? (score >= 70 ? "Likely Credible" : score < 40 ? "Low Credibility" : "Needs Verification");
+  const reasons = normalizeReasons(data.reasons ?? data.explanation ?? []);
+  const label = data.label ?? getScoreStage(score).label;
 
   renderArticle(pageTitle, pageDomain, contentSnippet);
   renderScore(score);
@@ -254,7 +285,7 @@ async function analyze() {
     let pageDomain = "";
     try {
       pageDomain = new URL(tab.url).hostname;
-    } catch {}
+    } catch { }
 
     // 2. Inject content extraction script
     let extractionResults;
@@ -307,7 +338,7 @@ async function analyze() {
           showError(
             "Analysis Failed",
             response?.error ||
-              "Backend server may be offline. Make sure the TruthLayer backend is running on localhost:3000.",
+            "Backend server may be offline. Make sure the TruthLayer backend is running on localhost:3000.",
           );
         }
       },
@@ -323,24 +354,6 @@ async function analyze() {
 // ---- Button Handlers ----
 btnRetry.addEventListener("click", () => analyze());
 
-btnFullAnalysis.addEventListener("click", () => {
-  // Expand all hidden details in the results view
-  const allCards = document.querySelectorAll(".card");
-  allCards.forEach((card) => {
-    if (card.classList.contains("hidden")) {
-      card.classList.remove("hidden");
-    }
-  });
-
-  // Scroll to top to show full content
-  const container = document.querySelector(".popup-container");
-  if (container) {
-    container.scrollTop = 0;
-  }
-});
-
-
-
 // ---- Facebook Pause Toggle Logic ----
 const facebookSettings = document.getElementById("facebook-settings");
 const facebookToggle = document.getElementById("toggle-facebook-pause");
@@ -351,7 +364,7 @@ async function initFacebookToggle() {
   if (!tab) return;
 
   const isFacebook = tab.url && tab.url.includes("facebook.com");
-  
+
   if (isFacebook) {
     document.body.classList.add("compact-mode");
     // ON FACEBOOK: Show ONLY the toggle
@@ -359,7 +372,7 @@ async function initFacebookToggle() {
     generalAnalysisUI.classList.add("hidden");
     statusText.textContent = "Facebook Feed Control";
     headerStatus.style.display = "none"; // Hide pulsing dot on settings view
-    
+
     // Load state
     const { fbPaused } = await chrome.storage.local.get("fbPaused");
     facebookToggle.checked = !!fbPaused;
@@ -367,7 +380,7 @@ async function initFacebookToggle() {
     facebookToggle.addEventListener("change", async (e) => {
       const paused = e.target.checked;
       await chrome.storage.local.set({ fbPaused: paused });
-      
+
       // Notify content script in current tab
       chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_FB_PAUSE", paused });
     });
@@ -375,7 +388,45 @@ async function initFacebookToggle() {
     // NOT ON FACEBOOK: Show Analysis
     facebookSettings.classList.add("hidden");
     generalAnalysisUI.classList.remove("hidden");
-    
+
+    // Run the normal article analysis
+    analyze();
+  }
+};
+
+
+
+// ---- Facebook Pause Toggle Logic ----
+async function initFacebookToggle() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+
+  const isFacebook = tab.url && tab.url.includes("facebook.com");
+
+  if (isFacebook) {
+    document.body.classList.add("compact-mode");
+    // ON FACEBOOK: Show ONLY the toggle
+    facebookSettings.classList.remove("hidden");
+    generalAnalysisUI.classList.add("hidden");
+    statusText.textContent = "Facebook Feed Control";
+    headerStatus.style.display = "none"; // Hide pulsing dot on settings view
+
+    // Load state
+    const { fbPaused } = await chrome.storage.local.get("fbPaused");
+    facebookToggle.checked = !!fbPaused;
+
+    facebookToggle.addEventListener("change", async (e) => {
+      const paused = e.target.checked;
+      await chrome.storage.local.set({ fbPaused: paused });
+
+      // Notify content script in current tab
+      chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_FB_PAUSE", paused });
+    });
+  } else {
+    // NOT ON FACEBOOK: Show Analysis
+    facebookSettings.classList.add("hidden");
+    generalAnalysisUI.classList.remove("hidden");
+
     // Run the normal article analysis
     analyze();
   }

@@ -177,5 +177,5 @@ def external_ai_score(text: str) -> Dict[str, Any]:
         "external_ai_score": score,
         "label": label,
         "evidence_used": evidence_used,
-        "reasoning": f"External AI: {reasoning}"
+        "reasoning": reasoning
     }

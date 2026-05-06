@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TruthLayer",
   "version": "2.1.0",
-  "description": "Click to analyze any article's credibility with AI-powered fake news detection.",
+  "description": "Click to analyze any article's credibility with AI-powered fake news detection. Results should be used as guidance.",
   "permissions": [
     "activeTab",
     "scripting",

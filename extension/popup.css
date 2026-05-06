@@ -282,12 +282,10 @@ body.compact-mode .popup-settings {
   border-radius: 5px;
   background: linear-gradient(to right,
     #e74c3c 0%,
-    #e74c3c 25%,
-    #e67e22 25%,
-    #e67e22 45%,
-    #f1c40f 45%,
-    #f1c40f 65%,
-    #2ecc71 65%,
+    #e74c3c 40%,
+    #f1c40f 40%,
+    #f1c40f 70%,
+    #2ecc71 70%,
     #27ae60 100%
   );
   overflow: visible;
@@ -325,6 +323,50 @@ body.compact-mode .popup-settings {
 
 .bar-label-low { color: var(--accent-red); }
 .bar-label-high { color: var(--accent-green); }
+
+.score-stage-legend {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-card);
+}
+
+.score-stage-item {
+  display: grid;
+  grid-template-columns: 10px 52px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.score-stage-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.score-stage-dot.stage-low {
+  background: var(--accent-red);
+}
+
+.score-stage-dot.stage-medium {
+  background: var(--accent-yellow);
+}
+
+.score-stage-dot.stage-high {
+  background: var(--accent-green);
+}
+
+.score-stage-range {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.score-stage-name {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
 
 /* ---- Risk Indicators ---- */
 .risk-card {

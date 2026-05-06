@@ -5,6 +5,11 @@ let postDataMap = {}; // Map post signatures to analysis data
 let lastActivePostSignature = null; // Track the most recently interacted post
 let pendingShareData = null; // Store analysis data of the post being shared
 
+const SCORE_THRESHOLDS = {
+    lowMax: 40,
+    highMin: 70
+};
+
 // Load initial state
 chrome.storage.local.get(["fbPaused"], (data) => {
     fbPaused = !!data.fbPaused;
@@ -76,6 +81,21 @@ function debugLog(...args) {
     if (DEBUG_MODE) {
         console.log('[TruthLayer Debug]', ...args);
     }
+}
+
+function getScoreStage(score) {
+    if (typeof score !== 'number') return 'unknown';
+    if (score >= SCORE_THRESHOLDS.highMin) return 'high';
+    if (score <= SCORE_THRESHOLDS.lowMax) return 'low';
+    return 'medium';
+}
+
+function getScoreStageLabel(score) {
+    const stage = getScoreStage(score);
+    if (stage === 'high') return 'Likely Credible';
+    if (stage === 'medium') return 'Needs Verification';
+    if (stage === 'low') return 'Low Credibility';
+    return 'Unable to Verify';
 }
 
 function isShareNowTrigger(el) {
@@ -212,14 +232,12 @@ function showModalForElement(el, data = null) {
         e.stopPropagation();
         e.preventDefault();
 
-        // Check credibility - only show countdown for low credibility (score < 50)
-        // High Risk (< 50) triggers countdown. Medium Risk (50-79) allows sharing without countdown.
         const score = pendingShareData?.credibilityScore ?? pendingShareData?.score ?? null;
+        const stage = getScoreStage(score);
         debugLog(`Share Anyway clicked. Score: ${score}`);
 
-        if (score !== null && score >= 50) {
-            // High or medium credibility - allow share without countdown
-            debugLog(`✓ Share allowed for MIDDLE risk/High credibility (${score}). No countdown.`);
+        if (stage === 'medium' || stage === 'high') {
+            debugLog(`✓ Share allowed for ${stage} stage post (${score}). No countdown.`);
             if (pendingShareElement) {
                 pendingShareElement.dataset.truthlayerBypass = '1';
                 try {
@@ -233,7 +251,7 @@ function showModalForElement(el, data = null) {
             return;
         }
 
-        debugLog(`✗ HIGH risk or unknown (${score}). Starting countdown.`);
+        debugLog(`✗ Low credibility or unknown (${score}). Starting countdown.`);
 
         // Start a 5-second countdown where the user can cancel
         countdownSeconds = 5;
@@ -373,17 +391,22 @@ document.addEventListener('click', (ev) => {
         const score = data?.credibilityScore ?? data?.score ?? null;
 
         // NEW LOGIC: Only show modal for MIDDLE risk (50-79) and HIGH risk (< 50)
-        if (score !== null && score >= 80) {
+        if (score !== null && score >= 70) {
             debugLog(`✓ Allowing share for LOW risk post (score: ${score})`);
-            return; // allow default behavior
+            const stage = getScoreStage(score);
+
+            if (stage === 'high') {
+                debugLog(`✓ Allowing share for likely credible post (score: ${score})`);
+                return; // allow default behavior
+            }
+
+            // Block the native flow and show our modal instead
+            ev.stopImmediatePropagation();
+            ev.preventDefault();
+
+            pendingShareElement = shareEl;
+            showModalForElement(shareEl, data);
         }
-
-        // Block the native flow and show our modal instead
-        ev.stopImmediatePropagation();
-        ev.preventDefault();
-
-        pendingShareElement = shareEl;
-        showModalForElement(shareEl, data);
     } catch (err) {
         console.error('TruthLayer share interception error', err);
     }
@@ -397,42 +420,42 @@ document.addEventListener('click', (ev) => {
 
         const targetText = (target.textContent || '').trim();
         const parentText = (target.parentElement?.textContent || '').trim();
-        
+
         // Match "See more" or "See Translation"
-        const isSeeMore = /^(See more|See Translation)$/i.test(targetText) || 
-                         /^(See more|See Translation)$/i.test(parentText);
+        const isSeeMore = /^(See more|See Translation)$/i.test(targetText) ||
+            /^(See more|See Translation)$/i.test(parentText);
 
         if (isSeeMore) {
             debugLog('"See more/translation" click detected!');
 
             // Find the most likely post root container
             const postRoot = target.closest('[data-pagelet*="FeedUnit"]') ||
-                            target.closest('[role="article"]') ||
-                            target.closest('[data-truthlayer-processed="true"]') ||
-                            target.closest('[data-truthlayer-signature]');
+                target.closest('[role="article"]') ||
+                target.closest('[data-truthlayer-processed="true"]') ||
+                target.closest('[data-truthlayer-signature]');
 
             if (postRoot) {
                 debugLog('Post container captured. Waiting for DOM expansion...');
-                
+
                 // Temporarily mark as "re-processing" to prevent duplicate triggers
                 postRoot.dataset.truthlayerReprocessing = "true";
 
                 // Wait for expansion to complete
                 setTimeout(async () => {
                     debugLog('Triggering re-analysis after expansion.');
-                    
+
                     // Forcefully clear all TruthLayer flags on this element and children
                     delete postRoot.dataset.truthlayerProcessed;
                     delete postRoot.dataset.truthlayerSignature;
                     delete postRoot.dataset.truthlayerReprocessing;
-                    
+
                     postRoot.querySelectorAll('[data-truthlayer-processed]').forEach(el => {
                         delete el.dataset.truthlayerProcessed;
                     });
 
                     // Find top container for cleanup
-                    const topContainer = postRoot.closest('[data-pagelet*="FeedUnit"], [role="article"]') || 
-                                       (typeof resolveAuthorSearchRoot === 'function' ? resolveAuthorSearchRoot(postRoot) : postRoot);
+                    const topContainer = postRoot.closest('[data-pagelet*="FeedUnit"], [role="article"]') ||
+                        (typeof resolveAuthorSearchRoot === 'function' ? resolveAuthorSearchRoot(postRoot) : postRoot);
 
                     // Remove existing UI
                     [postRoot, topContainer].forEach(container => {
@@ -690,7 +713,7 @@ function buildAuthorResult(name, anchorEl) {
 function highlightPost(element, score = 100) {
     if (DEBUG_MODE && element) {
         // Only add border if score is low (HIGH likelihood of being fake)
-        if (score < 40) {
+        if (score <= SCORE_THRESHOLDS.lowMax) {
             element.classList.add('truthlayer-danger-border');
         } else {
             element.classList.remove('truthlayer-danger-border');
@@ -958,7 +981,7 @@ function injectBanner(postElement, data) {
     console.log('TruthLayer: Injecting banner with data:', data);
 
     const score = data.credibilityScore !== undefined ? data.credibilityScore : (data.score || 0);
-    const label = data.classification || data.label || 'Unknown';
+    const label = getScoreStageLabel(score);
     const reasons = data.keyRiskIndicators || data.reasons || [];
 
     // Apply conditional border logic
@@ -966,10 +989,11 @@ function injectBanner(postElement, data) {
 
     let themeClass = 'truthlayer-badge-green';
     let iconClass = 'safe';
-    if (score < 50) {
+    const stage = getScoreStage(score);
+    if (stage === 'low') {
         themeClass = 'truthlayer-badge-red';
         iconClass = 'warning';
-    } else if (score < 80) {
+    } else if (stage === 'medium') {
         themeClass = 'truthlayer-badge-yellow';
         iconClass = 'caution';
     }
@@ -1075,18 +1099,32 @@ function injectBanner(postElement, data) {
 }
 
 function getRestoreIconVariant(score) {
-    if (typeof score !== 'number') return 'truthlayer-restore-unknown';
-    if (score >= 80) return 'truthlayer-restore-high';
-    if (score >= 50) return 'truthlayer-restore-medium';
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) return 'truthlayer-restore-unknown';
+    if (numericScore >= SCORE_THRESHOLDS.highMin) return 'truthlayer-restore-high';
+    if (numericScore > SCORE_THRESHOLDS.lowMax) return 'truthlayer-restore-medium';
     return 'truthlayer-restore-low';
 }
 
 function getRestoreIconVariantFromData(data) {
+    const score = data?.credibilityScore ?? data?.score ?? null;
+
+    // Score is the source of truth for UI state. Only fall back to labels if score is missing.
+    if (score !== null && score !== undefined && score !== '') {
+        return getRestoreIconVariant(score);
+    }
+
     const classification = String(data?.classification || data?.label || '').toLowerCase();
-    if (classification === 'credible') return 'truthlayer-restore-high';
-    if (classification.includes('somewhat credible') || classification.includes('somewhat')) return 'truthlayer-restore-medium';
-    if (classification.includes('questionable') || classification.includes('misinformation') || classification.includes('unable')) return 'truthlayer-restore-low';
-    return getRestoreIconVariant(data?.credibilityScore ?? data?.score ?? null);
+    if (classification.includes('likely credible') || classification === 'credible' || classification.includes('low risk')) {
+        return 'truthlayer-restore-high';
+    }
+    if (classification.includes('needs verification') || classification.includes('medium risk') || classification.includes('somewhat credible') || classification.includes('somewhat')) {
+        return 'truthlayer-restore-medium';
+    }
+    if (classification.includes('low credibility') || classification.includes('high risk') || classification.includes('critical risk') || classification.includes('questionable') || classification.includes('misinformation') || classification.includes('unable')) {
+        return 'truthlayer-restore-low';
+    }
+    return 'truthlayer-restore-unknown';
 }
 
 function injectRestoreIcon(postElement, data) {

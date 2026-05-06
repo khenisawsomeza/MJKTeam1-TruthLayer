@@ -127,6 +127,19 @@ def predict_with_ml(text: str) -> Dict[str, Any]:
         }
 
 
+def format_external_ai_reason(reasoning: str) -> str:
+    """
+    Normalize external AI reasoning so the label is rendered only once.
+    """
+    cleaned_reasoning = re.sub(
+        r"^(External AI:\s*)+",
+        "",
+        reasoning or "",
+        flags=re.IGNORECASE,
+    ).strip()
+    return f"External AI: {cleaned_reasoning}" if cleaned_reasoning else ""
+
+
 @app.post("/analyze")
 def analyze_post(post: PostData) -> Dict[str, Any]:
     """
@@ -190,17 +203,20 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     final_score = max(0, min(100, final_score))  # Clamp 0-100
     
     # Determine label based on score
-    if final_score >= 75:
-        label = "Low Risk"
-    elif final_score >= 50:
-        label = "Medium Risk"
+    if final_score >= 70:
+        label = "Likely Credible"
+    elif final_score > 40:
+        label = "Needs Verification"
     else:
-        label = "High Risk"
+        label = "Low Credibility"
     
     # Combine all reasons
     all_reasons = rule_reasons + [ml_result["explanation"]]
-    if ext_ai_result["reasoning"]:
-        all_reasons.append(f"External AI: {ext_ai_result['reasoning']}")
+    external_ai_reason = format_external_ai_reason(
+        ext_ai_result.get("reasoning", "")
+    )
+    if external_ai_reason:
+        all_reasons.append(external_ai_reason)
         
     return {
         "fake_probability": fake_probability,

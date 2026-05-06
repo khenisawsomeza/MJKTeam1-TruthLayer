@@ -98,6 +98,7 @@ function determineLabel(score, confidence) {
         return 'Uncertain';
     }
 
+<<<<<<< HEAD
     if (score >= 80) {
         return 'Low Risk';
     } else if (score >= 60) {
@@ -108,7 +109,17 @@ function determineLabel(score, confidence) {
         return 'High Risk';
     } else {
         return 'Critical Risk';
+=======
+    if (score >= 70) {
+        return 'Likely Credible';
+>>>>>>> marc-may6
     }
+
+    if (score > 40) {
+        return 'Needs Verification';
+    }
+
+    return 'Low Credibility';
 }
 
 module.exports = {
