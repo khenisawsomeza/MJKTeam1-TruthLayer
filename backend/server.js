@@ -5,17 +5,18 @@ const scoring = require('./scoring');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const AI_SERVICE_URL = 'http://localhost:8000/analyze';
 
 // Middlewares
 app.use(cors()); // Allow requests from extension
 app.use(express.json());
 
+const AI_SERVICE_URL = 'http://localhost:8000/analyze';
+
 app.post('/analyze', async (req, res) => {
     try {
         const { text, content, url, source, platform } = req.body;
         const articleText = text || content;
-        
+
         if (!articleText) {
             return res.status(400).json({ error: "Text or content is required" });
         }
@@ -34,9 +35,9 @@ app.post('/analyze', async (req, res) => {
         // 3. AI Service analysis (ML)
         let aiResult = null;
         try {
-            const response = await axios.post(AI_SERVICE_URL, { 
+            const response = await axios.post(AI_SERVICE_URL, {
                 text: articleText,
-                source_score: sourceResult.score 
+                source_score: sourceResult.score
             });
             aiResult = response.data;
         } catch (aiError) {
@@ -92,7 +93,7 @@ app.post('/analyze', async (req, res) => {
 
     } catch (error) {
         console.error("Error in analysis pipeline:", error.message);
-        
+
         res.json({
             success: false,
             score: 50,
