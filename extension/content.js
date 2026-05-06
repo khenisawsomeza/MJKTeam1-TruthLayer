@@ -344,11 +344,36 @@ document.addEventListener('click', (ev) => {
         if (!target) return;
 
         // Look for share buttons on posts (before dialog opens)
-        const shareBtn = target.closest ? target.closest('button[aria-label*="Share"], [aria-label*="share"]') : null;
+        // FB labels vary: "Share", "Send this to friends or post it on your profile.", etc.
+        const shareBtn = target.closest ? target.closest(
+            'button[aria-label*="Share"], [aria-label*="share"], ' +
+            '[role="button"][aria-label*="Share"], [role="button"][aria-label*="share"], ' +
+            '[role="button"][aria-label*="Send this to friends"], ' +
+            '[data-ad-rendering-role="share_button"]'
+        ) : null;
+        
         if (!shareBtn) return;
 
-        // Find the post container
-        const post = shareBtn.closest('[data-truthlayer-signature]');
+        // Find the post container with the signature
+        // Try direct ancestor first
+        let post = shareBtn.closest('[data-truthlayer-signature]');
+        
+        // If not found, it might be a sibling structure (like in organic posts)
+        // Walk up to a likely post root and then look for the signature
+        if (!post) {
+            let walker = shareBtn;
+            for (let i = 0; i < 10; i++) {
+                if (!walker || walker === document.body) break;
+                // If this ancestor contains a signature anywhere, use that
+                const sigEl = walker.querySelector('[data-truthlayer-signature]');
+                if (sigEl) {
+                    post = sigEl;
+                    break;
+                }
+                walker = walker.parentElement;
+            }
+        }
+
         if (post) {
             lastActivePostSignature = post.dataset.truthlayerSignature;
             debugLog(`Tracking post for share: signature=${lastActivePostSignature}`);
@@ -940,8 +965,26 @@ function detectPosts(rootNode = document) {
                 el.closest('div[data-pagelet*="permalink"]') ||
                 el.closest('div[data-pagelet*="Permalink"]') ||
                 el.closest('[aria-posinset]') ||
-                el.closest('[role="article"]') ||
-                el;
+                el.closest('[role="article"]');
+
+            // If no standard container, walk up to find a div that encloses both header and footer
+            if (!container) {
+                let walker = el;
+                for (let i = 0; i < 8; i++) {
+                    if (!walker.parentElement || walker.parentElement === document.body) break;
+                    const p = walker.parentElement;
+                    // Does this parent contain a header (profile) or footer (share button)?
+                    if (p.querySelector('[data-ad-rendering-role="profile_name"]') || 
+                        p.querySelector('[data-ad-rendering-role="share_button"]') ||
+                        p.querySelector('[aria-label*="Share"]')) {
+                        container = p;
+                        // Keep walking a bit more to get the absolute outermost wrapper if possible
+                    }
+                    walker = p;
+                }
+            }
+            
+            if (!container) container = el;
 
             if (!container) return;
             if (container.dataset.truthlayerDismissed === 'true') return;
