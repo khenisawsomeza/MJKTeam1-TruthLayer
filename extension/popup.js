@@ -42,7 +42,7 @@ const sourceCredibility = document.getElementById("source-credibility");
 const btnFullAnalysis = document.getElementById("btn-full-analysis");
 
 const SCORE_THRESHOLDS = {
-  lowMax: 39,
+  lowMax: 40,
   highMin: 70,
 };
 

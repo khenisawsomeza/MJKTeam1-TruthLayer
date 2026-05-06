@@ -6,7 +6,7 @@ let lastActivePostSignature = null; // Track the most recently interacted post
 let pendingShareData = null; // Store analysis data of the post being shared
 
 const SCORE_THRESHOLDS = {
-    lowMax: 39,
+    lowMax: 40,
     highMin: 70
 };
 
@@ -709,7 +709,7 @@ function buildAuthorResult(name, anchorEl) {
 function highlightPost(element, score = 100) {
     if (DEBUG_MODE && element) {
         // Only add border if score is low (HIGH likelihood of being fake)
-        if (score < 40) {
+        if (score <= SCORE_THRESHOLDS.lowMax) {
             element.classList.add('truthlayer-danger-border');
         } else {
             element.classList.remove('truthlayer-danger-border');
@@ -1095,13 +1095,21 @@ function injectBanner(postElement, data) {
 }
 
 function getRestoreIconVariant(score) {
-    if (typeof score !== 'number') return 'truthlayer-restore-unknown';
-    if (score >= SCORE_THRESHOLDS.highMin) return 'truthlayer-restore-high';
-    if (score > SCORE_THRESHOLDS.lowMax) return 'truthlayer-restore-medium';
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) return 'truthlayer-restore-unknown';
+    if (numericScore >= SCORE_THRESHOLDS.highMin) return 'truthlayer-restore-high';
+    if (numericScore > SCORE_THRESHOLDS.lowMax) return 'truthlayer-restore-medium';
     return 'truthlayer-restore-low';
 }
 
 function getRestoreIconVariantFromData(data) {
+    const score = data?.credibilityScore ?? data?.score ?? null;
+
+    // Score is the source of truth for UI state. Only fall back to labels if score is missing.
+    if (score !== null && score !== undefined && score !== '') {
+        return getRestoreIconVariant(score);
+    }
+
     const classification = String(data?.classification || data?.label || '').toLowerCase();
     if (classification.includes('likely credible') || classification === 'credible' || classification.includes('low risk')) {
         return 'truthlayer-restore-high';
@@ -1112,7 +1120,7 @@ function getRestoreIconVariantFromData(data) {
     if (classification.includes('low credibility') || classification.includes('high risk') || classification.includes('critical risk') || classification.includes('questionable') || classification.includes('misinformation') || classification.includes('unable')) {
         return 'truthlayer-restore-low';
     }
-    return getRestoreIconVariant(data?.credibilityScore ?? data?.score ?? null);
+    return 'truthlayer-restore-unknown';
 }
 
 function injectRestoreIcon(postElement, data) {

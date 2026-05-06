@@ -179,7 +179,7 @@ function extractKeyFindings(explanation) {
     const findings = [];
 
     // Add score context
-    if (explanation.score < 40) {
+    if (explanation.score <= 40) {
         findings.push('Multiple credibility red flags detected');
     } else if (explanation.score < 70) {
         findings.push('Mixed credibility signals present');

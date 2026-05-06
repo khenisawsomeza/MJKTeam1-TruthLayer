@@ -205,7 +205,7 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     # Determine label based on score
     if final_score >= 70:
         label = "Likely Credible"
-    elif final_score >= 40:
+    elif final_score > 40:
         label = "Needs Verification"
     else:
         label = "Low Credibility"

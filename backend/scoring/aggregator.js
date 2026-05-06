@@ -102,7 +102,7 @@ function determineLabel(score, confidence) {
         return 'Likely Credible';
     }
 
-    if (score >= 40) {
+    if (score > 40) {
         return 'Needs Verification';
     }
 
