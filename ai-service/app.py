@@ -1,4 +1,5 @@
 import os
+import re
 import joblib
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,7 +51,9 @@ def calculate_rule_score(text: str) -> tuple[float, List[str]]:
         'dont want you to know', 'hate this', 'you wont believe'
     ]
     for word in sensational_words:
-        if word in lower_text:
+        # Use word boundaries \b to ensure exact word matches (avoids matching 'secret' in 'secretary')
+        pattern = fr"\b{re.escape(word)}\b"
+        if re.search(pattern, lower_text):
             score -= 15
             reasons.append(f"Sensational language: '{word}'")
             break
