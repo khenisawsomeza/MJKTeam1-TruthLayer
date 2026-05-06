@@ -160,21 +160,28 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     ml_score = (1.0 - fake_probability) * 100
     ext_score = (1.0 - ext_ai_prob) * 100
     
-    # Calculate overall confidence
-    # High confidence when ML model is certain and rule-based system agrees
-    overall_confidence = ml_confidence
-    
-    # Simple agreement check: do rule and ML roughly agree?
-    rule_agrees_with_ml = abs(rule_score - ml_score) < 30
-    if rule_agrees_with_ml:
-        overall_confidence = min(1.0, overall_confidence * 1.2)  # Boost confidence if they agree
-    
     # Final score: weighted average
     # ML model -> 10%
     # Rule-based -> 10%
     # External AI (HF + RAG) -> 30%
     # Source checker -> 50%
     source_score = post.source_score
+
+    # Calculate overall confidence
+    # If ML is missing, we start with a base confidence of 0.3 if rules/source are active
+    # If ML is present, we use its confidence as the base
+    base_confidence = ml_confidence if ML_AVAILABLE else 0.3
+    
+    # Simple agreement check: do rule and ML (or source) agree?
+    # We compare the rule score against the weighted average of other signals
+    other_signals_avg = (ml_score * 0.2 + ext_score * 0.3 + source_score * 0.5)
+    agreement = 1.0 - (abs(rule_score - other_signals_avg) / 100)
+    
+    # Combine base confidence with the agreement between systems
+    overall_confidence = (base_confidence * 0.4) + (agreement * 0.6)
+    
+    # Final clamping to ensure valid range
+    overall_confidence = max(0.1, min(1.0, overall_confidence))
     
     final_score = (ml_score * 0.1) + (rule_score * 0.1) + (ext_score * 0.3) + (source_score * 0.5)
     final_score = max(0, min(100, final_score))  # Clamp 0-100

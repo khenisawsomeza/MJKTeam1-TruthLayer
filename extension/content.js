@@ -1,9 +1,9 @@
 const DEBUG_MODE = true;
 let fbPaused = false;
 let cachedDismissedPosts = {}; // Session-only dismissal cache
-let postCredibilityMap = {}; // Map post signatures to credibility scores
+let postDataMap = {}; // Map post signatures to analysis data
 let lastActivePostSignature = null; // Track the most recently interacted post
-let pendingShareCredibility = null; // Store credibility score of the post being shared
+let pendingShareData = null; // Store analysis data of the post being shared
 
 // Load initial state
 chrome.storage.local.get(["fbPaused"], (data) => {
@@ -99,18 +99,37 @@ function isShareNowTrigger(el) {
     return null;
 }
 
-function createShareModal() {
+function createShareModal(data) {
     const overlay = document.createElement('div');
     overlay.className = 'truthlayer-share-overlay';
     const card = document.createElement('div');
     card.className = 'truthlayer-share-card';
+
+    const reasons = data?.keyRiskIndicators || data?.reasons || [];
+    let reasonsHtml = '';
+
+    if (reasons.length > 0) {
+        reasonsHtml = reasons.map(r => `
+            <li>
+                <strong>${r}</strong>
+                <div class="muted">TruthLayer Risk Indicator</div>
+            </li>
+        `).join('');
+    } else {
+        reasonsHtml = `
+            <li>
+                <strong>Unusual patterns detected</strong>
+                <div class="muted">Analysis suggested caution for this content</div>
+            </li>
+        `;
+    }
+
     card.innerHTML = `
         <div class="truthlayer-share-icon">⚠️</div>
         <h3>This content may be misleading</h3>
         <p>Consider these factors before sharing:</p>
         <ul class="truthlayer-share-list">
-            <li><strong>High viral potential</strong><div class="muted">Could reach many people quickly</div></li>
-            <li><strong>Emotional manipulation</strong><div class="muted">Uses triggering language and urgency</div></li>
+            ${reasonsHtml}
         </ul>
         <div class="truthlayer-share-actions">
             <button class="truthlayer-share-cancel">Cancel</button>
@@ -119,33 +138,33 @@ function createShareModal() {
     `;
 
     overlay.appendChild(card);
-
     return overlay;
 }
 
 let pendingShareElement = null;
 
 // Fallback: search page for active posts with credibility data
-function findActivePostCredibility() {
+function findActivePostData() {
     const posts = document.querySelectorAll('[data-truthlayer-signature]');
     for (const post of posts) {
-        if (post._truthlayerData && post._truthlayerData.credibilityScore !== undefined) {
-            const score = post._truthlayerData.credibilityScore;
-            debugLog(`Fallback: found post credibility score: ${score}`);
-            return score;
+        if (post._truthlayerData) {
+            return post._truthlayerData;
         }
     }
     return null;
 }
 
-function showModalForElement(el, credibilityScore = null) {
-    // Store the credibility score - use fallback if not provided
-    pendingShareCredibility = credibilityScore !== null ? credibilityScore : findActivePostCredibility();
-    debugLog(`Modal opened with credibility score: ${pendingShareCredibility}`);
+function showModalForElement(el, data = null) {
+    // Store the analysis data - use fallback if not provided
+    pendingShareData = data !== null ? data : findActivePostData();
+    const score = pendingShareData?.credibilityScore ?? pendingShareData?.score ?? null;
+
+    debugLog(`Modal opened with credibility score: ${score}`);
+
     // Avoid multiple modals
     if (document.querySelector('.truthlayer-share-overlay')) return;
 
-    const modal = createShareModal();
+    const modal = createShareModal(pendingShareData);
     document.body.appendChild(modal);
 
     const cancelBtn = modal.querySelector('.truthlayer-share-cancel');
@@ -156,7 +175,7 @@ function showModalForElement(el, credibilityScore = null) {
     function cleanup() {
         try { modal.remove(); } catch (e) { }
         pendingShareElement = null;
-        pendingShareCredibility = null;
+        pendingShareData = null;
         document.removeEventListener('keydown', onKeyDown, true);
         if (countdownInterval) {
             clearInterval(countdownInterval);
@@ -193,11 +212,14 @@ function showModalForElement(el, credibilityScore = null) {
         e.stopPropagation();
         e.preventDefault();
 
-        // Check credibility - only show countdown for low credibility (score < 60)
-        debugLog(`Share Anyway clicked. Credibility score: ${pendingShareCredibility}`);
-        if (pendingShareCredibility !== null && pendingShareCredibility >= 60) {
+        // Check credibility - only show countdown for low credibility (score < 50)
+        // High Risk (< 50) triggers countdown. Medium Risk (50-79) allows sharing without countdown.
+        const score = pendingShareData?.credibilityScore ?? pendingShareData?.score ?? null;
+        debugLog(`Share Anyway clicked. Score: ${score}`);
+
+        if (score !== null && score >= 50) {
             // High or medium credibility - allow share without countdown
-            debugLog(`✓ Share allowed for HIGH credibility (${pendingShareCredibility}). No countdown.`);
+            debugLog(`✓ Share allowed for MIDDLE risk/High credibility (${score}). No countdown.`);
             if (pendingShareElement) {
                 pendingShareElement.dataset.truthlayerBypass = '1';
                 try {
@@ -211,7 +233,7 @@ function showModalForElement(el, credibilityScore = null) {
             return;
         }
 
-        debugLog(`✗ LOW credibility or unknown (${pendingShareCredibility}). Starting countdown.`);
+        debugLog(`✗ HIGH risk or unknown (${score}). Starting countdown.`);
 
         // Start a 5-second countdown where the user can cancel
         countdownSeconds = 5;
@@ -336,19 +358,32 @@ document.addEventListener('click', (ev) => {
             return; // allow default behavior
         }
 
+        // Get credibility data for the post being shared
+        let data = null;
+        if (lastActivePostSignature && postDataMap[lastActivePostSignature]) {
+            data = postDataMap[lastActivePostSignature];
+        }
+
+        // Fallback: if signature lookup failed, try to find the post in the DOM that has data
+        if (!data) {
+            data = findActivePostData();
+            if (data) debugLog('✓ Found post data via DOM fallback');
+        }
+
+        const score = data?.credibilityScore ?? data?.score ?? null;
+
+        // NEW LOGIC: Only show modal for MIDDLE risk (50-79) and HIGH risk (< 50)
+        if (score !== null && score >= 80) {
+            debugLog(`✓ Allowing share for LOW risk post (score: ${score})`);
+            return; // allow default behavior
+        }
+
         // Block the native flow and show our modal instead
         ev.stopImmediatePropagation();
         ev.preventDefault();
 
         pendingShareElement = shareEl;
-
-        // Get credibility score for the post being shared
-        let credibilityScore = null;
-        if (lastActivePostSignature && postCredibilityMap[lastActivePostSignature]) {
-            credibilityScore = postCredibilityMap[lastActivePostSignature];
-        }
-
-        showModalForElement(shareEl, credibilityScore);
+        showModalForElement(shareEl, data);
     } catch (err) {
         console.error('TruthLayer share interception error', err);
     }
@@ -360,33 +395,59 @@ document.addEventListener('click', (ev) => {
         const target = ev.target;
         if (!target) return;
 
-        const text = (target.textContent || '').trim().toLowerCase();
+        const targetText = (target.textContent || '').trim();
+        const parentText = (target.parentElement?.textContent || '').trim();
+        
+        // Match "See more" or "See Translation"
+        const isSeeMore = /^(See more|See Translation)$/i.test(targetText) || 
+                         /^(See more|See Translation)$/i.test(parentText);
 
-        if (text === 'see more' || target.innerText?.toLowerCase().trim() === 'see more') {
-            console.log('TruthLayer: "See more" click detected!');
+        if (isSeeMore) {
+            debugLog('"See more/translation" click detected!');
 
-            // CRITICAL: Find the post container IMMEDIATELY. 
-            // Once clicked, FB might remove this button from the DOM, making .closest() fail later.
-            const post = target.closest('[data-truthlayer-processed="true"]') ||
-                target.closest('[role="article"]') ||
-                target.closest('[data-pagelet*="FeedUnit"]');
+            // Find the most likely post root container
+            const postRoot = target.closest('[data-pagelet*="FeedUnit"]') ||
+                            target.closest('[role="article"]') ||
+                            target.closest('[data-truthlayer-processed="true"]') ||
+                            target.closest('[data-truthlayer-signature]');
 
-            if (post) {
-                console.log('TruthLayer: Post container captured. Waiting for DOM to expand...');
+            if (postRoot) {
+                debugLog('Post container captured. Waiting for DOM expansion...');
+                
+                // Temporarily mark as "re-processing" to prevent duplicate triggers
+                postRoot.dataset.truthlayerReprocessing = "true";
 
-                setTimeout(() => {
-                    console.log('TruthLayer: Triggering re-analysis now.');
-                    // Clear the processed flag
-                    post.removeAttribute('data-truthlayer-processed');
-                    // Remove existing banner
-                    const existingBanner = post.querySelector('.truthlayer-banner');
-                    if (existingBanner) existingBanner.remove();
+                // Wait for expansion to complete
+                setTimeout(async () => {
+                    debugLog('Triggering re-analysis after expansion.');
+                    
+                    // Forcefully clear all TruthLayer flags on this element and children
+                    delete postRoot.dataset.truthlayerProcessed;
+                    delete postRoot.dataset.truthlayerSignature;
+                    delete postRoot.dataset.truthlayerReprocessing;
+                    
+                    postRoot.querySelectorAll('[data-truthlayer-processed]').forEach(el => {
+                        delete el.dataset.truthlayerProcessed;
+                    });
 
-                    // Trigger a scan
-                    if (typeof runScan === 'function') runScan();
-                }, 500); // Wait a bit longer for the text to fully swap
+                    // Find top container for cleanup
+                    const topContainer = postRoot.closest('[data-pagelet*="FeedUnit"], [role="article"]') || 
+                                       (typeof resolveAuthorSearchRoot === 'function' ? resolveAuthorSearchRoot(postRoot) : postRoot);
+
+                    // Remove existing UI
+                    [postRoot, topContainer].forEach(container => {
+                        container.querySelectorAll('.truthlayer-floating-popup, .truthlayer-restore-icon, .truthlayer-banner').forEach(el => el.remove());
+                    });
+
+                    // Directly call processPost for this specific element
+                    if (typeof processPost === 'function') {
+                        await processPost(postRoot);
+                    } else if (typeof runScan === 'function') {
+                        runScan();
+                    }
+                }, 1200); // 1.2s to be safer for slow connections/expansions
             } else {
-                console.warn('TruthLayer: Could not find post container for "See more" button.');
+                debugLog('Could not find post container for expansion button.');
             }
         }
     } catch (e) {
@@ -925,12 +986,16 @@ function injectBanner(postElement, data) {
     // Save data to element for instant restoration
     postElement._truthlayerData = data;
 
-    // Persist data and dismissal state
-    const text = postElement.innerText || "";
-    const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+    // Persist data for share checking
+    let signature = postElement.dataset.truthlayerSignature;
+    if (!signature) {
+        const text = postElement.innerText || "";
+        signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+        postElement.dataset.truthlayerSignature = signature;
+    }
 
-    // Store credibility score for share checking
-    postCredibilityMap[signature] = score;
+    // Store analysis data for share checking
+    postDataMap[signature] = data;
 
     // Reasons HTML
     let reasonsHtml = '';
