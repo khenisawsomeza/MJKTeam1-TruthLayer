@@ -1028,14 +1028,12 @@ function injectBanner(postElement, data) {
         </div>
         <div class="truthlayer-popup-actions">
             <button class="truthlayer-popup-btn truthlayer-btn-why">Why?</button>
-            <button class="truthlayer-popup-btn truthlayer-btn-sources">Sources ↗</button>
         </div>
         ${reasonsHtml}
     `;
 
     const btnClose = popup.querySelector('.truthlayer-popup-close');
     const btnWhy = popup.querySelector('.truthlayer-btn-why');
-    const btnSources = popup.querySelector('.truthlayer-btn-sources');
     const expandable = popup.querySelector('.truthlayer-popup-expandable');
 
     btnClose.addEventListener('click', (e) => {
@@ -1064,11 +1062,7 @@ function injectBanner(postElement, data) {
         }
     });
 
-    btnSources.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        alert("Sources verification feature coming soon.");
-    });
+
 
     // Inject into DOM
     topContainer.appendChild(popup);

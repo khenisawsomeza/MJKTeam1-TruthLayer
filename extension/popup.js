@@ -37,11 +37,9 @@ const warningTriggers = document.getElementById("warning-triggers");
 
 // Source
 const sourceCredibility = document.getElementById("source-credibility");
-const sourceNoteText = document.getElementById("source-note-text");
 
 // Buttons
 const btnFullAnalysis = document.getElementById("btn-full-analysis");
-const btnTrustedSources = document.getElementById("btn-trusted-sources");
 
 // ---- Risk icon mapping ----
 const RISK_ICONS = [
@@ -195,26 +193,7 @@ function renderEmotionalWarning(reasons) {
   }
 }
 
-// ---- Render Source Verification ----
-function renderSourceVerification(score) {
-  let credLabel = "Medium";
-  let credClass = "src-medium";
-  let noteText = "Limited or no external references";
 
-  if (score >= 70) {
-    credLabel = "High";
-    credClass = "src-high";
-    noteText = "Source appears reputable";
-  } else if (score < 40) {
-    credLabel = "Low";
-    credClass = "src-low";
-    noteText = "Source could not be verified";
-  }
-
-  sourceCredibility.textContent = credLabel;
-  sourceCredibility.className = "source-value " + credClass;
-  sourceNoteText.textContent = noteText;
-}
 
 // ---- Render Full Results ----
 function renderResults(data, pageTitle, pageDomain, contentSnippet) {
@@ -229,7 +208,6 @@ function renderResults(data, pageTitle, pageDomain, contentSnippet) {
   renderScore(score);
   renderRisks(reasons);
   renderEmotionalWarning(reasons);
-  renderSourceVerification(score);
 
   statusText.textContent = "Analysis complete";
   showState("results");
@@ -361,9 +339,7 @@ btnFullAnalysis.addEventListener("click", () => {
   }
 });
 
-btnTrustedSources.addEventListener("click", () => {
-  chrome.tabs.create({ url: "https://mediabiasfactcheck.com/" });
-});
+
 
 // ---- Facebook Pause Toggle Logic ----
 const facebookSettings = document.getElementById("facebook-settings");
