@@ -38,9 +38,6 @@ const warningTriggers = document.getElementById("warning-triggers");
 // Source
 const sourceCredibility = document.getElementById("source-credibility");
 
-// Buttons
-const btnFullAnalysis = document.getElementById("btn-full-analysis");
-
 const SCORE_THRESHOLDS = {
   lowMax: 40,
   highMin: 70,
@@ -354,24 +351,6 @@ async function analyze() {
 
 // ---- Button Handlers ----
 btnRetry.addEventListener("click", () => analyze());
-
-btnFullAnalysis.addEventListener("click", () => {
-  // Expand all hidden details in the results view
-  const allCards = document.querySelectorAll(".card");
-  allCards.forEach((card) => {
-    if (card.classList.contains("hidden")) {
-      card.classList.remove("hidden");
-    }
-  });
-
-  // Scroll to top to show full content
-  const container = document.querySelector(".popup-container");
-  if (container) {
-    container.scrollTop = 0;
-  }
-});
-
-
 
 // ---- Facebook Pause Toggle Logic ----
 const facebookSettings = document.getElementById("facebook-settings");
