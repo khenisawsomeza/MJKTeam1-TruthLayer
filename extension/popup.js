@@ -93,6 +93,18 @@ function showError(title, message) {
   showState("error");
 }
 
+function normalizeReason(reason) {
+  if (typeof reason !== "string") return "";
+  return reason.replace(/^(External AI:\s*)+/i, "External AI: ").trim();
+}
+
+function normalizeReasons(reasons) {
+  if (!Array.isArray(reasons)) return [];
+  return reasons
+    .map((reason) => normalizeReason(reason))
+    .filter((reason) => reason.length > 0);
+}
+
 // ---- Render Article Preview ----
 function renderArticle(pageTitle, pageDomain, contentSnippet) {
   articleTitle.textContent = pageTitle || "Untitled Page";
@@ -135,9 +147,10 @@ function renderScore(score) {
 
 // ---- Render Risk Indicators ----
 function renderRisks(reasons) {
+  const normalizedReasons = normalizeReasons(reasons);
   riskList.innerHTML = "";
 
-  if (!reasons || reasons.length === 0) {
+  if (normalizedReasons.length === 0) {
     const li = document.createElement("li");
     li.innerHTML = `
       <span class="risk-icon icon-green">✅</span>
@@ -147,7 +160,7 @@ function renderRisks(reasons) {
     return;
   }
 
-  reasons.forEach((reason) => {
+  normalizedReasons.forEach((reason) => {
     const li = document.createElement("li");
 
     // Find matching icon
@@ -171,12 +184,14 @@ function renderRisks(reasons) {
 
 // ---- Render Emotional Manipulation Warning ----
 function renderEmotionalWarning(reasons) {
-  if (!reasons || reasons.length === 0) {
+  const normalizedReasons = normalizeReasons(reasons);
+
+  if (normalizedReasons.length === 0) {
     warningCard.classList.add("hidden");
     return;
   }
 
-  const reasonsText = reasons.join(" ");
+  const reasonsText = normalizedReasons.join(" ");
   const triggers = new Set();
 
   EMOTION_PATTERNS.forEach((ep) => {
@@ -201,7 +216,7 @@ function renderResults(data, pageTitle, pageDomain, contentSnippet) {
   
   // Handle different potential field names from AI service
   const score = data.score ?? data.credibility_score ?? 50;
-  const reasons = data.reasons ?? data.explanation ?? [];
+  const reasons = normalizeReasons(data.reasons ?? data.explanation ?? []);
   const label = data.label ?? (score >= 70 ? "Likely Credible" : score < 40 ? "Low Credibility" : "Needs Verification");
 
   renderArticle(pageTitle, pageDomain, contentSnippet);

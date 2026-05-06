@@ -127,6 +127,19 @@ def predict_with_ml(text: str) -> Dict[str, Any]:
         }
 
 
+def format_external_ai_reason(reasoning: str) -> str:
+    """
+    Normalize external AI reasoning so the label is rendered only once.
+    """
+    cleaned_reasoning = re.sub(
+        r"^(External AI:\s*)+",
+        "",
+        reasoning or "",
+        flags=re.IGNORECASE,
+    ).strip()
+    return f"External AI: {cleaned_reasoning}" if cleaned_reasoning else ""
+
+
 @app.post("/analyze")
 def analyze_post(post: PostData) -> Dict[str, Any]:
     """
@@ -199,8 +212,11 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     
     # Combine all reasons
     all_reasons = rule_reasons + [ml_result["explanation"]]
-    if ext_ai_result["reasoning"]:
-        all_reasons.append(f"External AI: {ext_ai_result['reasoning']}")
+    external_ai_reason = format_external_ai_reason(
+        ext_ai_result.get("reasoning", "")
+    )
+    if external_ai_reason:
+        all_reasons.append(external_ai_reason)
         
     return {
         "fake_probability": fake_probability,
