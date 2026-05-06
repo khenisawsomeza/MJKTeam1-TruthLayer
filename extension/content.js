@@ -236,7 +236,7 @@ function showModalForElement(el, data = null) {
         const stage = getScoreStage(score);
         debugLog(`Share Anyway clicked. Score: ${score}`);
 
-        if (stage === 'medium' || stage === 'high') {
+        if (stage === 'high') {
             debugLog(`✓ Share allowed for ${stage} stage post (${score}). No countdown.`);
             if (pendingShareElement) {
                 pendingShareElement.dataset.truthlayerBypass = '1';
@@ -390,20 +390,20 @@ document.addEventListener('click', (ev) => {
 
         const score = data?.credibilityScore ?? data?.score ?? null;
 
-        // NEW LOGIC: Only show modal for MIDDLE risk (50-79) and HIGH risk (< 50)
-        if (score !== null && score >= 70) {
-            debugLog(`✓ Allowing share for LOW risk post (score: ${score})`);
-            const stage = getScoreStage(score);
-
-            if (stage === 'high') {
-                debugLog(`✓ Allowing share for likely credible post (score: ${score})`);
-                return; // allow default behavior
-            }
+        // NEW LOGIC: Only show modal for MIDDLE risk (40-69) and HIGH risk (<= 40)
+        if (score !== null && score < 70) {
+            debugLog(`⚠ Intercepting share for risky post (score: ${score})`);
 
             // Block the native flow and show our modal instead
             ev.stopImmediatePropagation();
             ev.preventDefault();
 
+            pendingShareElement = shareEl;
+            showModalForElement(shareEl, data);
+        } else if (score === null) {
+            debugLog(`⚠ No credibility data found for post. Showing caution modal.`);
+            ev.stopImmediatePropagation();
+            ev.preventDefault();
             pendingShareElement = shareEl;
             showModalForElement(shareEl, data);
         }
@@ -1135,6 +1135,21 @@ function injectRestoreIcon(postElement, data) {
     if (existing) existing.remove();
 
     const score = data?.credibilityScore ?? data?.score ?? null;
+    
+    // Save data to element for instant restoration
+    postElement._truthlayerData = data;
+
+    // Persist data for share checking
+    let signature = postElement.dataset.truthlayerSignature;
+    if (!signature) {
+        const text = postElement.innerText || "";
+        signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
+        postElement.dataset.truthlayerSignature = signature;
+    }
+
+    // Store analysis data for share checking
+    postDataMap[signature] = data;
+
     const icon = document.createElement('div');
     icon.className = `truthlayer-restore-icon ${getRestoreIconVariantFromData(data)}`;
     icon.innerHTML = 'ⓘ';
