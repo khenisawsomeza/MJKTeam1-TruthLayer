@@ -57,7 +57,11 @@ function analyzeRules(text, options = {}) {
 
     // Rule 1: Sensational keywords (highest priority)
     for (const keyword of SENSATIONAL_KEYWORDS) {
-        if (lower.includes(keyword)) {
+        // Use word boundaries \b to ensure exact word matches (avoids matching 'secret' in 'secretary')
+        const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
+        
+        if (regex.test(text)) {
             deductions.push(15);
             reasons.push(`Sensational keyword detected: "${keyword}"`);
             severity.push('high');
@@ -68,7 +72,10 @@ function analyzeRules(text, options = {}) {
     // Also check Tagalog sensational terms when language is Tagalog or unknown
     if (lang === 'tl' || lang === 'unknown') {
         for (const k of TAGALOG_SENSATIONAL) {
-            if (lower.includes(k)) {
+            const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const kRegex = new RegExp(`\\b${escapedK}\\b`, 'i');
+
+            if (kRegex.test(text)) {
                 deductions.push(15);
                 reasons.push(`Sensational (Tagalog) keyword detected: "${k}"`);
                 severity.push('high');
