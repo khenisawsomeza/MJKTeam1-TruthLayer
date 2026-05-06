@@ -916,8 +916,11 @@ function injectBanner(postElement, data) {
     const popup = document.createElement('div');
     popup.className = 'truthlayer-floating-popup';
 
+    const topContainer = postElement.closest('[data-pagelet*="FeedUnit"], [role="article"]') || (typeof resolveAuthorSearchRoot === 'function' ? resolveAuthorSearchRoot(postElement) : postElement);
+
     // Remove any existing banner or restore icon
     postElement.querySelectorAll('.truthlayer-floating-popup, .truthlayer-restore-icon, .truthlayer-banner').forEach(el => el.remove());
+    topContainer.querySelectorAll('.truthlayer-floating-popup, .truthlayer-restore-icon, .truthlayer-banner').forEach(el => el.remove());
 
     // Save data to element for instant restoration
     postElement._truthlayerData = data;
@@ -1003,11 +1006,11 @@ function injectBanner(postElement, data) {
     });
 
     // Inject into DOM
-    postElement.appendChild(popup);
+    topContainer.appendChild(popup);
 
-    const currentPosition = window.getComputedStyle(postElement).position;
+    const currentPosition = window.getComputedStyle(topContainer).position;
     if (!currentPosition || currentPosition === 'static') {
-        postElement.style.position = 'relative';
+        topContainer.style.position = 'relative';
     }
     debugLog('Popup successfully injected into post element.');
 }
@@ -1028,8 +1031,10 @@ function getRestoreIconVariantFromData(data) {
 }
 
 function injectRestoreIcon(postElement, data) {
+    const topContainer = postElement.closest('[data-pagelet*="FeedUnit"], [role="article"]') || (typeof resolveAuthorSearchRoot === 'function' ? resolveAuthorSearchRoot(postElement) : postElement);
+
     // Remove any existing
-    const existing = postElement.querySelector('.truthlayer-restore-icon');
+    const existing = topContainer.querySelector('.truthlayer-restore-icon') || postElement.querySelector('.truthlayer-restore-icon');
     if (existing) existing.remove();
 
     const score = data?.credibilityScore ?? data?.score ?? null;
@@ -1060,11 +1065,11 @@ function injectRestoreIcon(postElement, data) {
         injectBanner(postElement, data);
     });
 
-    postElement.appendChild(icon);
+    topContainer.appendChild(icon);
 
-    const currentPosition = window.getComputedStyle(postElement).position;
+    const currentPosition = window.getComputedStyle(topContainer).position;
     if (!currentPosition || currentPosition === 'static') {
-        postElement.style.position = 'relative';
+        topContainer.style.position = 'relative';
     }
 }
 
