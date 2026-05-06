@@ -1,6 +1,9 @@
 const DEBUG_MODE = true;
 let fbPaused = false;
 let cachedDismissedPosts = {}; // Session-only dismissal cache
+let postCredibilityMap = {}; // Map post signatures to credibility scores
+let lastActivePostSignature = null; // Track the most recently interacted post
+let pendingShareCredibility = null; // Store credibility score of the post being shared
 
 // Load initial state
 chrome.storage.local.get(["fbPaused"], (data) => {
@@ -122,7 +125,23 @@ function createShareModal() {
 
 let pendingShareElement = null;
 
-function showModalForElement(el) {
+// Fallback: search page for active posts with credibility data
+function findActivePostCredibility() {
+    const posts = document.querySelectorAll('[data-truthlayer-signature]');
+    for (const post of posts) {
+        if (post._truthlayerData && post._truthlayerData.credibilityScore !== undefined) {
+            const score = post._truthlayerData.credibilityScore;
+            debugLog(`Fallback: found post credibility score: ${score}`);
+            return score;
+        }
+    }
+    return null;
+}
+
+function showModalForElement(el, credibilityScore = null) {
+    // Store the credibility score - use fallback if not provided
+    pendingShareCredibility = credibilityScore !== null ? credibilityScore : findActivePostCredibility();
+    debugLog(`Modal opened with credibility score: ${pendingShareCredibility}`);
     // Avoid multiple modals
     if (document.querySelector('.truthlayer-share-overlay')) return;
 
@@ -137,6 +156,7 @@ function showModalForElement(el) {
     function cleanup() {
         try { modal.remove(); } catch (e) { }
         pendingShareElement = null;
+        pendingShareCredibility = null;
         document.removeEventListener('keydown', onKeyDown, true);
         if (countdownInterval) {
             clearInterval(countdownInterval);
@@ -172,6 +192,26 @@ function showModalForElement(el) {
     confirmBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
+
+        // Check credibility - only show countdown for low credibility (score < 60)
+        debugLog(`Share Anyway clicked. Credibility score: ${pendingShareCredibility}`);
+        if (pendingShareCredibility !== null && pendingShareCredibility >= 60) {
+            // High or medium credibility - allow share without countdown
+            debugLog(`✓ Share allowed for HIGH credibility (${pendingShareCredibility}). No countdown.`);
+            if (pendingShareElement) {
+                pendingShareElement.dataset.truthlayerBypass = '1';
+                try {
+                    pendingShareElement.click();
+                } catch (err) {
+                    const ev = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+                    pendingShareElement.dispatchEvent(ev);
+                }
+            }
+            cleanup();
+            return;
+        }
+        
+        debugLog(`✗ LOW credibility or unknown (${pendingShareCredibility}). Starting countdown.`);
 
         // Start a 5-second countdown where the user can cancel
         countdownSeconds = 5;
@@ -257,6 +297,27 @@ function showModalForElement(el) {
     document.addEventListener('keydown', onKeyDown, true);
 }
 
+// Capture which post is being shared
+document.addEventListener('click', (ev) => {
+    try {
+        const target = ev.target;
+        if (!target) return;
+
+        // Look for share buttons on posts (before dialog opens)
+        const shareBtn = target.closest ? target.closest('button[aria-label*="Share"], [aria-label*="share"]') : null;
+        if (!shareBtn) return;
+
+        // Find the post container
+        const post = shareBtn.closest('[data-truthlayer-signature]');
+        if (post) {
+            lastActivePostSignature = post.dataset.truthlayerSignature;
+            debugLog(`Tracking post for share: signature=${lastActivePostSignature}`);
+        }
+    } catch (e) {
+        // Silent fail - this is just tracking
+    }
+}, true);
+
 document.addEventListener('click', (ev) => {
     try {
         // If the click is inside our modal overlay, ignore it so modal buttons work
@@ -280,7 +341,14 @@ document.addEventListener('click', (ev) => {
         ev.preventDefault();
 
         pendingShareElement = shareEl;
-        showModalForElement(shareEl);
+        
+        // Get credibility score for the post being shared
+        let credibilityScore = null;
+        if (lastActivePostSignature && postCredibilityMap[lastActivePostSignature]) {
+            credibilityScore = postCredibilityMap[lastActivePostSignature];
+        }
+        
+        showModalForElement(shareEl, credibilityScore);
     } catch (err) {
         console.error('TruthLayer share interception error', err);
     }
@@ -787,6 +855,9 @@ function injectBanner(postElement, data) {
     const text = postElement.innerText || "";
     const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
     
+    // Store credibility score for share checking
+    postCredibilityMap[signature] = score;
+    
     // Reasons HTML
     let reasonsHtml = '';
     if (reasons && reasons.length > 0) {
@@ -870,15 +941,33 @@ function injectBanner(postElement, data) {
     debugLog('Popup successfully injected into post element.');
 }
 
+function getRestoreIconVariant(score) {
+    if (typeof score !== 'number') return 'truthlayer-restore-unknown';
+    if (score >= 80) return 'truthlayer-restore-high';
+    if (score >= 50) return 'truthlayer-restore-medium';
+    return 'truthlayer-restore-low';
+}
+
+function getRestoreIconVariantFromData(data) {
+    const classification = String(data?.classification || data?.label || '').toLowerCase();
+    if (classification === 'credible') return 'truthlayer-restore-high';
+    if (classification.includes('somewhat credible') || classification.includes('somewhat')) return 'truthlayer-restore-medium';
+    if (classification.includes('questionable') || classification.includes('misinformation') || classification.includes('unable')) return 'truthlayer-restore-low';
+    return getRestoreIconVariant(data?.credibilityScore ?? data?.score ?? null);
+}
+
 function injectRestoreIcon(postElement, data) {
     // Remove any existing
     const existing = postElement.querySelector('.truthlayer-restore-icon');
     if (existing) existing.remove();
 
+    const score = data?.credibilityScore ?? data?.score ?? null;
     const icon = document.createElement('div');
-    icon.className = 'truthlayer-restore-icon';
+    icon.className = `truthlayer-restore-icon ${getRestoreIconVariantFromData(data)}`;
     icon.innerHTML = 'ⓘ';
-    icon.title = 'Restore TruthLayer Analysis';
+    icon.title = typeof score === 'number'
+        ? `Restore TruthLayer Analysis (${score})`
+        : 'Restore TruthLayer Analysis';
 
     icon.addEventListener('click', (e) => {
         e.preventDefault();
