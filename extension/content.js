@@ -21,19 +21,19 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "TOGGLE_FB_PAUSE") {
         fbPaused = msg.paused;
         debugLog(`Toggle received: fbPaused = ${fbPaused}`);
-        
+
         if (fbPaused) {
             removeAllPopups();
         } else {
             debugLog('Resuming TruthLayer: Resetting all UI states.');
-            
+
             // Clear session-only dismissals on resume
             cachedDismissedPosts = {};
-            
+
             clearProcessedFlags();
-            rehydrateUI(); 
-            initialScan(); 
-            runScan();     
+            rehydrateUI();
+            initialScan();
+            runScan();
         }
     }
 });
@@ -210,7 +210,7 @@ function showModalForElement(el, credibilityScore = null) {
             cleanup();
             return;
         }
-        
+
         debugLog(`✗ LOW credibility or unknown (${pendingShareCredibility}). Starting countdown.`);
 
         // Start a 5-second countdown where the user can cancel
@@ -341,13 +341,13 @@ document.addEventListener('click', (ev) => {
         ev.preventDefault();
 
         pendingShareElement = shareEl;
-        
+
         // Get credibility score for the post being shared
         let credibilityScore = null;
         if (lastActivePostSignature && postCredibilityMap[lastActivePostSignature]) {
             credibilityScore = postCredibilityMap[lastActivePostSignature];
         }
-        
+
         showModalForElement(shareEl, credibilityScore);
     } catch (err) {
         console.error('TruthLayer share interception error', err);
@@ -483,7 +483,7 @@ function extractAuthor(postElement) {
     );
     if (profileNameDiv) {
         const anchor = profileNameDiv.querySelector('a[role="link"]') ||
-                       profileNameDiv.querySelector('a');
+            profileNameDiv.querySelector('a');
         if (anchor) {
             const name = cleanAuthorName(
                 anchor.innerText || anchor.textContent || ''
@@ -619,7 +619,7 @@ function isValidAuthorName(name) {
  */
 function buildAuthorResult(name, anchorEl) {
     let url = anchorEl?.getAttribute('href') ||
-              anchorEl?.getAttribute('data-href') || null;
+        anchorEl?.getAttribute('data-href') || null;
     if (url) {
         try { url = new URL(url, window.location.href).href; } catch (e) { url = null; }
     }
@@ -635,7 +635,7 @@ function highlightPost(element, score = 100) {
             element.classList.remove('truthlayer-danger-border');
         }
         element.style.position = 'relative';
-        
+
         // Add a debug label if not already present
         if (!element.dataset.truthlayerHighlighted) {
             const label = document.createElement('div');
@@ -744,19 +744,48 @@ function detectPosts(rootNode = document) {
         '[data-pagelet*="feed"] [role="article"]',
     ];
 
+    // 2.5 Add permalink-specific selectors if on a single-post page
+    // 2.5 Add permalink-specific selectors if on a single-post page
+    const isPermalinkPage =
+        path.includes('/posts/') ||
+        path.includes('/photo') ||
+        path.includes('/videos/') ||
+        path.includes('/permalink/') ||
+        path.includes('/reel/') ||
+        window.location.search.includes('fbid=');
+
+    if (isPermalinkPage) {
+        postSelectors.push('div[data-pagelet*="permalink"]');
+        postSelectors.push('div[data-pagelet*="Permalink"]');
+        postSelectors.push('div[data-pagelet*="Media"]');
+        postSelectors.push('div[data-pagelet*="Photo"]');
+        postSelectors.push('div[data-pagelet*="Biz"]');
+        postSelectors.push('div[data-testid="post_message"]');
+        postSelectors.push('div[data-ad-preview="message"]');
+        postSelectors.push('[aria-posinset]');
+        // Add role="article" as a fallback ONLY on permalink pages
+        postSelectors.push('[role="article"]');
+    }
+
     // 3. Comprehensive chat/messenger ancestor blocklist
     function isInsideMessagingUI(el) {
         // Fixed-position chat popup boxes Facebook injects at the bottom of the page
-        if (el.closest('[data-pagelet="ChatTab"]'))          return true;
-        if (el.closest('[data-pagelet^="ChatTab"]'))         return true;
-        if (el.closest('[data-testid="chat_tab"]'))          return true;
-        if (el.closest('[data-testid="messenger_chat"]'))    return true;
+        if (el.closest('[data-pagelet="ChatTab"]')) return true;
+        if (el.closest('[data-pagelet^="ChatTab"]')) return true;
+        if (el.closest('[data-testid="chat_tab"]')) return true;
+        if (el.closest('[data-testid="messenger_chat"]')) return true;
 
         // Messenger drawer / docked chat windows
-        if (el.closest('[aria-label="Messenger"]'))          return true;
-        if (el.closest('[aria-label="Messages"]'))           return true;
-        if (el.closest('[aria-label="Chat"]'))               return true;
-        if (el.closest('[role="complementary"]'))            return true;
+        if (el.closest('[aria-label="Messenger"]')) return true;
+        if (el.closest('[aria-label="Messages"]')) return true;
+        if (el.closest('[aria-label="Chat"]')) return true;
+        // Only block role="complementary" (sidebars) if it's clearly for messaging
+        const comp = el.closest('[role="complementary"]');
+        if (comp) {
+            const label = (comp.getAttribute('aria-label') || '').toLowerCase();
+            if (/\b(chat|message|messenger|conversation|inbox)\b/.test(label)) return true;
+            // Otherwise, it might be a post info sidebar on a permalink page, so don't block.
+        }
 
         // Structural: fixed-position containers at the bottom-right are chat boxes
         let node = el;
@@ -766,7 +795,7 @@ function detectPosts(rootNode = document) {
                 // A fixed element that isn't a full-screen dialog is almost certainly chat
                 const rect = node.getBoundingClientRect();
                 const isFullScreen =
-                    rect.width  > window.innerWidth  * 0.8 &&
+                    rect.width > window.innerWidth * 0.8 &&
                     rect.height > window.innerHeight * 0.8;
                 if (!isFullScreen) return true;
             }
@@ -780,6 +809,42 @@ function detectPosts(rootNode = document) {
         return false;
     }
 
+    function isInsideCommentSection(el) {
+        // 1. Explicit comment roles/ids
+        if (el.closest('[data-testid*="comment"]')) return true;
+        if (el.closest('[data-ad-rendering-role="comment"]')) return true;
+        if (el.hasAttribute('data-comment-id')) return true;
+
+        // 2. Comment list containers
+        if (el.closest('[data-testid="comment_list"]')) return true;
+        if (el.closest('[data-testid="UFI2CommentsList/root_depth_0"]')) return true;
+        if (el.closest('[role="list"] [role="article"]')) {
+            // If it's an article INSIDE a list, and we are not on the main feed, it's likely a comment
+            if (!el.closest('[data-pagelet*="Feed"]')) return true;
+        }
+
+        // 3. Sidebars that are not post-specific
+        if (el.closest('[role="complementary"]') && !isPermalinkPage) return true;
+
+        // 4. Nested articles 
+        // Comments are often articles inside articles, but so are reshared posts.
+        // We only block if we are deep inside a list or have explicit comment markers.
+        const articleAncestor = el.parentElement?.closest('[role="article"]');
+        if (articleAncestor) {
+            if (isPermalinkPage) return false;
+            // If the ancestor is a feed unit, then this "nested" article is likely the shared content.
+            if (articleAncestor.closest('[data-pagelet*="Feed"]')) return false;
+            // Otherwise, if it's inside a generic list, it's probably a comment.
+            if (el.closest('[role="list"]')) return true;
+        }
+
+        // 5. Explicit "Comment" labels
+        const label = (el.getAttribute('aria-label') || '').toLowerCase();
+        if (label.includes('comment') || label.includes('reply')) return true;
+
+        return false;
+    }
+
     postSelectors.forEach(selector => {
         rootNode.querySelectorAll(selector).forEach(el => {
             // Walk up to find the best post-root container
@@ -788,17 +853,23 @@ function detectPosts(rootNode = document) {
                 el.closest('[data-pagelet*="GroupFeed"]') ||
                 el.closest('[data-pagelet*="ProfileFeed"]') ||
                 el.closest('[data-pagelet*="WatchFeed"]') ||
+                el.closest('div[data-pagelet*="permalink"]') ||
+                el.closest('div[data-pagelet*="Permalink"]') ||
+                el.closest('[aria-posinset]') ||
                 el.closest('[role="article"]') ||
                 el;
 
             if (!container) return;
             if (container.dataset.truthlayerDismissed === 'true') return;
 
-            // Bail out if inside any messaging surface
+            // Bail out if inside any messaging surface or comment section
             if (isInsideMessagingUI(container)) return;
+            if (isInsideCommentSection(container)) return;
 
             const text = container.innerText || '';
-            if (text.length < 50) return;
+            // For permalink pages, we are much more lenient with text length
+            const minLength = isPermalinkPage ? 20 : 50;
+            if (text.length < minLength) return;
 
             const signature =
                 text.length + '_' + text.substring(0, 30).replace(/\s/g, '');
@@ -822,9 +893,9 @@ function detectPosts(rootNode = document) {
 
 function injectBanner(postElement, data) {
     if (postElement.dataset.truthlayerDismissed === "true") return;
-    
+
     console.log('TruthLayer: Injecting banner with data:', data);
-    
+
     const score = data.credibilityScore !== undefined ? data.credibilityScore : (data.score || 0);
     const label = data.classification || data.label || 'Unknown';
     const reasons = data.keyRiskIndicators || data.reasons || [];
@@ -854,10 +925,10 @@ function injectBanner(postElement, data) {
     // Persist data and dismissal state
     const text = postElement.innerText || "";
     const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
-    
+
     // Store credibility score for share checking
     postCredibilityMap[signature] = score;
-    
+
     // Reasons HTML
     let reasonsHtml = '';
     if (reasons && reasons.length > 0) {
@@ -906,7 +977,7 @@ function injectBanner(postElement, data) {
         popup.remove();
         postElement.classList.remove('truthlayer-danger-border');
         postElement.dataset.truthlayerDismissed = "true";
-        
+
         // Track in-memory ONLY for current page session
         cachedDismissedPosts[signature] = data;
 
@@ -924,7 +995,7 @@ function injectBanner(postElement, data) {
             btnWhy.textContent = 'Hide';
         }
     });
-    
+
     btnSources.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -973,10 +1044,10 @@ function injectRestoreIcon(postElement, data) {
         e.preventDefault();
         e.stopPropagation();
         icon.remove();
-        
+
         // Clear dismissal state on the element so it can be re-processed
         delete postElement.dataset.truthlayerDismissed;
-        
+
         // Remove from dismissed storage
         const text = postElement.innerText || "";
         const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
@@ -990,7 +1061,7 @@ function injectRestoreIcon(postElement, data) {
     });
 
     postElement.appendChild(icon);
-    
+
     const currentPosition = window.getComputedStyle(postElement).position;
     if (!currentPosition || currentPosition === 'static') {
         postElement.style.position = 'relative';
@@ -1013,7 +1084,7 @@ async function processPost(postElement) {
         // If already processed but has no UI, check if it's because it was dismissed
         const text = postElement.innerText || "";
         const signature = text.length + "_" + text.substring(0, 30).replace(/\s/g, '');
-        
+
         if (cachedDismissedPosts[signature] && !postElement.querySelector('.truthlayer-restore-icon')) {
             injectRestoreIcon(postElement, cachedDismissedPosts[signature]);
         }
@@ -1046,7 +1117,7 @@ async function processPost(postElement) {
     // Falls back to a broad SVG title search if the anchor is unavailable.
     const verifiedBadgeInAnchor = author?.anchorEl
         ? !!author.anchorEl.closest('[data-ad-rendering-role="profile_name"]')
-              ?.querySelector('svg[title="Verified account"], svg[aria-label="Verified account"]')
+            ?.querySelector('svg[title="Verified account"], svg[aria-label="Verified account"]')
         : false;
     const verifiedBadgeFallback = !verifiedBadgeInAnchor && (
         !!postElement.querySelector(
@@ -1087,7 +1158,18 @@ async function processPost(postElement) {
             }
             if (response && response.success) {
                 console.log('TruthLayer: Analysis received successfully:', response.data);
-                injectBanner(postElement, response.data);
+
+                // If score < 70, auto-show the popup.
+                // If score >= 70, show only a small info icon (manual access).
+                const score = response.data.score ?? response.data.credibilityScore ?? 100;
+                if (score < 70) {
+                    injectBanner(postElement, response.data);
+                } else {
+                    debugLog(`Post is credible (score: ${score}). Showing minimal indicator.`);
+                    injectRestoreIcon(postElement, response.data);
+                }
+                // Mark as processed to avoid re-scanning
+                postElement.dataset.truthlayerProcessed = "true";
             } else {
                 console.error('TruthLayer: Backend error', response?.error);
                 injectBanner(postElement, getDefaultAnalysis(text, response?.error));
