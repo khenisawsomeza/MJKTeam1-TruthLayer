@@ -1,167 +1,74 @@
-# TruthLayer Project Overview
+# TruthLayer
 
-## Project Name
+TruthLayer is an AI-assisted credibility analysis tool designed to help users evaluate the trustworthiness of online content in real-time. By turning complex credibility signals into simple, understandable labels, TruthLayer empowers users to make better judgments about social posts, articles, and viral claims.
 
-- **Project name:** TruthLayer
-- **Status:** Hackathon project documentation draft
+## 1. What the Project is
+TruthLayer is a browser-based ecosystem (currently a Chrome Extension) that assesses whether content looks trustworthy, suspicious, or in need of further verification. While it is specifically optimized for **Facebook feed and post workflows** with inline banners, it also enables users to **manually analyze any website or article** by clicking the extension popup while on the page.
 
-## About the Project
+### Core Objectives
+- **Combat Misinformation**: Provide immediate friction and warnings for high-risk content.
+- **Explainable AI**: Instead of a simple "true/false," it provides scores, confidence levels, and clear reasoning.
+- **Source Verification**: Analyzes not just the text, but the reputation of the source or page sharing it.
 
-- **Official Theme:** Build from Anywhere, Build Anything!
-- This project is part of a creative build challenge focused on technical freedom and innovation.
+---
 
-## Project Purpose
+## 2. How it Works
+TruthLayer utilizes a three-tier architecture to deliver real-time analysis:
 
-- TruthLayer is built to help users make better judgments about the credibility of online content.
-- The project addresses the growing difficulty of evaluating social posts, articles, and viral claims quickly and responsibly.
-- Its goal is to turn complex credibility signals into a simple, understandable result for the user.
+### The Analysis Flow
+1.  **Detection & Extraction**: The **Chrome Extension** operates in two modes:
+    - **Automatic**: It monitors the browser DOM (specifically Facebook) to detect and analyze posts as they appear.
+    - **Manual**: Users can click the extension popup on any website or article to trigger a real-time credibility check of the current page's content.
+2.  **Orchestration**: The extension sends the payload to the **Node.js Backend**. The backend runs a modular scoring system:
+    - **Rule-based checks**: Evaluates sensationalism, clickbait patterns, and linguistic red flags.
+    - **Source Credibility**: Checks the page or domain against a database of known indicators.
+3.  **AI Reasoning**: The backend forwards the data to the **FastAPI AI Service**. This service uses a hybrid approach:
+    - **ML Inference**: A trained model classifies the text based on learned features.
+    - **LLM Integration**: Leverages advanced AI (OpenAI, Gemini, Groq) to perform deep reasoning and evidence-assisted fact-checking.
+4.  **Feedback Loop**: The synthesized score (0-100), confidence level, and explanation are sent back through the layers.
+5.  **UI Injection**: The extension renders a color-coded banner (Green for Trusted, Yellow for Suspicious, Red for High Risk) directly onto the social media post, along with a "Why?" toggle for detailed insights.
 
-## What the Project Is
+---
 
-- TruthLayer is an AI-assisted credibility analysis tool designed to help users quickly assess whether online content looks trustworthy, suspicious, or in need of further verification.
-- In its current implementation, the project functions mainly as a **Chrome extension** with supporting backend services.
-- The extension can analyze content from browser pages and currently includes specific support for **Facebook feed/post workflows**.
-- The system combines rule-based checks, source evaluation, and machine learning or external AI signals to generate a credibility score, confidence value, and explanation.
+## 3. How to Set it Up
 
-## Domain Fit
+### Prerequisites
+- Node.js (v16 or higher)
+- Python 3.9+
+- Chrome Browser
 
-- **Primary domain: Intelligence Systems & Data**
-  - The project uses AI/ML, scoring logic, and supporting evidence workflows to transform raw content into an interpretable credibility assessment.
-- **Why it fits**
-  - It is both an analysis system and a practical decision-support tool.
-  - It turns unstructured text and source signals into structured outputs such as scores, labels, reasons, and confidence.
+### Step 1: Backend API
+1.  Navigate to the `backend/` directory.
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+3.  Start the server:
+    ```bash
+    npm start
+    ```
+    *The backend will run on `http://localhost:3000`.*
 
-## How the Project Works
+### Step 2: AI Service
+1.  Navigate to the `ai-service/` directory.
+2.  Create a virtual environment (recommended) and install requirements:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  Start the service:
+    ```bash
+    python -m uvicorn app:app --reload --port 8000
+    ```
+    *The AI service will run on `http://localhost:8000`.*
 
-### High-Level Flow
+### Step 3: Chrome Extension
+1.  Open Chrome and navigate to `chrome://extensions/`.
+2.  Enable **Developer Mode** in the top right corner.
+3.  Click **Load unpacked**.
+4.  Select the `extension/` folder from this repository.
+5.  Pin the TruthLayer extension for easy access.
 
-1. A user opens content in the browser and triggers analysis through the TruthLayer extension or via supported page detection.
-2. The extension gathers post or article text and, when available, source information such as page name, URL, or platform context.
-3. The extension sends the content payload to the local Node/Express backend at `http://localhost:3000/analyze`.
-4. The backend runs local scoring logic:
-   - rule-based content analysis
-   - source credibility analysis
-5. The backend also calls the FastAPI AI service at `http://localhost:8000/analyze`.
-6. The AI service evaluates the content using:
-   - a trained ML model
-   - internal rule scoring
-   - external AI or evidence-assisted reasoning
-   - source score passed from the backend
-7. The AI service returns scores, confidence, reasons, and a breakdown.
-8. The backend formats the final result into a response the extension can display to the user.
-9. The extension presents a credibility label, score, and explanation in the browser UI.
-
-### Current System Behavior Notes
-
-- The extension is browser-facing and user-interactive.
-- The backend acts as the orchestration layer between UI logic and analysis services.
-- The AI service is responsible for ML inference and score synthesis.
-- If the AI service is unavailable, the backend can still return a fallback result using local logic.
-
-## Key Features or Components
-
-### Browser Extension
-
-- Chrome Manifest V3 extension
-- Popup UI for running or viewing analysis
-- Background service worker for message handling and API communication
-- Content script for Facebook page/post detection and inline UI behavior
-- Local browser storage support for pause and dismissal states
-
-### Backend API
-
-- Express-based API server
-- Main `/analyze` endpoint for content scoring
-- `/version` endpoint for extension development support
-- CORS enabled for local extension communication
-- Modular scoring system under `backend/scoring/`
-
-### Scoring Modules
-
-- `rules.js`
-  - evaluates text patterns and credibility red flags
-- `sourceChecker.js`
-  - evaluates source/page/domain credibility indicators
-- `aggregator.js`
-  - combines scoring outputs into a final score
-- `explainer.js`
-  - converts technical results into user-facing explanations
-
-### AI Service
-
-- FastAPI application in `ai-service/app.py`
-- Local ML model files: `model.pkl` and `vectorizer.pkl`
-- Training script in `ai-service/train.py`
-- Health check endpoint at `/health`
-- Support for external AI or evidence-enhanced reasoning through additional service integrations
-
-## Setup Instructions
-
-### Backend Setup
-
-- Go to `backend/`
-- Run `npm install`
-- Start the backend with `npm start`
-- Expected local URL: `http://localhost:3000`
-
-### AI Service Setup
-
-- Go to `ai-service/`
-- Install dependencies with `pip install -r requirements.txt`
-- If needed, train the model with `python train.py`
-- Start the service with `python -m uvicorn app:app --reload --port 8000`
-- Expected local URL: `http://localhost:8000`
-
-### Extension Setup
-
-- Open Chrome and go to the Extensions page
-- Enable Developer Mode
-- Load the `extension/` folder as an unpacked extension
-- Verify that the backend and AI service are already running locally before testing
-
-### Basic Verification
-
-- Check backend version at `http://localhost:3000/version`
-- Check AI service health at `http://localhost:8000/health`
-- Test content analysis through the extension or by posting to `/analyze`
-
-## Tech Stack
-
-- **Frontend / Client**
-  - Chrome Extension (Manifest V3)
-  - HTML
-  - CSS
-  - JavaScript
-- **Backend**
-  - Node.js
-  - Express
-  - Axios
-  - CORS
-- **AI / ML Service**
-  - Python
-  - FastAPI
-  - Uvicorn
-  - scikit-learn
-  - joblib
-  - NumPy
-  - Pydantic
-- **Supporting Integrations / Libraries**
-  - `requests`
-  - `beautifulsoup4`
-  - `ddgs`
-  - `huggingface-hub`
-  - `openai`
-- `google-generativeai`
-- `groq`
-
-## Notes
-
-- The current primary use case is credibility analysis for social posts and web content, especially Facebook content.
-- **Note:** The backend currently expects the AI service at `http://localhost:8000/analyze`.
-
-## Future Expansion Areas
-
-- Expand beyond Facebook-focused workflows into broader web article and platform coverage
-- Strengthen source validation through more trusted evidence and verification sources
-- Improve privacy, transparency, and explanation quality for end users
-- Add sample screenshots, demo flow visuals, and architecture diagrams for future presentations
+### Verification
+- Visit `http://localhost:3000/version` to ensure the backend is alive.
+- Visit `http://localhost:8000/health` to check the AI service.
+- Open Facebook and look for the TruthLayer analysis banners appearing on posts.
