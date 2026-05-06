@@ -92,17 +92,22 @@ function calculateMethodAgreement(ruleScore, mlScore, sourceScore) {
  * @returns {string} Risk label
  */
 function determineLabel(score, confidence) {
-    // If confidence is very low, return "Uncertain"
-    if (confidence < 0.2) {
+    // If confidence is extremely low, return "Uncertain"
+    // We lowered this from 0.2 to 0.1 to allow source-based results to show
+    if (confidence < 0.1) {
         return 'Uncertain';
     }
 
-    if (score >= 75) {
+    if (score >= 80) {
         return 'Low Risk';
-    } else if (score >= 50) {
+    } else if (score >= 60) {
+        return 'Likely Credible';
+    } else if (score >= 40) {
         return 'Medium Risk';
-    } else {
+    } else if (score >= 20) {
         return 'High Risk';
+    } else {
+        return 'Critical Risk';
     }
 }
 

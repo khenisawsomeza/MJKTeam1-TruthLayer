@@ -10,6 +10,7 @@ load_dotenv()
 # Load API Keys from env
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 def get_duckduckgo_search_results(query: str, max_results: int = 3) -> List[Dict[str, str]]:
     """
@@ -72,6 +73,19 @@ Respond ONLY with a valid JSON object in the exact following format, with no mar
 """
     return prompt
 
+def query_groq(prompt: str) -> Dict[str, Any]:
+    from groq import Groq
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0
+    )
+    result_text = response.choices[0].message.content.strip()
+    if result_text.startswith("```json"):
+        result_text = result_text.replace("```json", "").replace("```", "").strip()
+    return json.loads(result_text)
+
 def query_openai(prompt: str) -> Dict[str, Any]:
     import openai
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
@@ -89,7 +103,7 @@ def query_openai(prompt: str) -> Dict[str, Any]:
 def query_gemini(prompt: str) -> Dict[str, Any]:
     import google.generativeai as genai
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
     response = model.generate_content(prompt, generation_config={"temperature": 0.0})
     result_text = response.text.strip()
     if result_text.startswith("```json"):
@@ -101,8 +115,8 @@ from functools import lru_cache
 @lru_cache(maxsize=100)
 def external_ai_score(text: str) -> Dict[str, Any]:
     """
-    Main external AI verification function combining RAG and OpenAI/Gemini Inference.
-    Results are cached to prevent duplicate API requests for identical claims.
+    Main external AI verification function combining RAG and AI Inference.
+    Prioritizes Groq, then OpenAI, then Gemini.
     """
     # Step 1: Web Retrieval (RAG Component)
     query = extract_keywords(text)
@@ -121,14 +135,17 @@ def external_ai_score(text: str) -> Dict[str, Any]:
     ai_response = None
     
     try:
-        if OPENAI_API_KEY and OPENAI_API_KEY.strip() != "":
+        if GROQ_API_KEY and GROQ_API_KEY.strip() != "":
+            print("Using Groq for validation.")
+            ai_response = query_groq(prompt)
+        elif OPENAI_API_KEY and OPENAI_API_KEY.strip() != "":
             print("Using OpenAI for validation.")
             ai_response = query_openai(prompt)
         elif GEMINI_API_KEY and GEMINI_API_KEY.strip() != "":
             print("Using Google Gemini for validation.")
             ai_response = query_gemini(prompt)
         else:
-            print("No valid OpenAI or Gemini API key found. Defaulting to neutral.")
+            print("No valid API keys found. Defaulting to neutral.")
     except Exception as e:
         print(f"External AI Error: {e}")
 
