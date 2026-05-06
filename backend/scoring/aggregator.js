@@ -38,7 +38,7 @@ function aggregateScores(scores) {
     // Confidence is based on:
     // 1. ML model's own confidence
     // 2. Agreement between different scoring methods
-    
+
     const methodAgreement = calculateMethodAgreement(rule, ml, source);
     const combinedConfidence = (mlConfidence * 0.3) + (methodAgreement * 0.7);
 
@@ -98,21 +98,8 @@ function determineLabel(score, confidence) {
         return 'Uncertain';
     }
 
-<<<<<<< HEAD
-    if (score >= 80) {
-        return 'Low Risk';
-    } else if (score >= 60) {
-        return 'Likely Credible';
-    } else if (score >= 40) {
-        return 'Medium Risk';
-    } else if (score >= 20) {
-        return 'High Risk';
-    } else {
-        return 'Critical Risk';
-=======
     if (score >= 70) {
         return 'Likely Credible';
->>>>>>> marc-may6
     }
 
     if (score > 40) {
