@@ -90,6 +90,14 @@ function getScoreStage(score) {
     return 'medium';
 }
 
+function getScoreStageLabel(score) {
+    const stage = getScoreStage(score);
+    if (stage === 'high') return 'Likely Credible';
+    if (stage === 'medium') return 'Needs Verification';
+    if (stage === 'low') return 'Low Credibility';
+    return 'Unable to Verify';
+}
+
 function isShareNowTrigger(el) {
     if (!el) return null;
 
@@ -969,7 +977,7 @@ function injectBanner(postElement, data) {
     console.log('TruthLayer: Injecting banner with data:', data);
 
     const score = data.credibilityScore !== undefined ? data.credibilityScore : (data.score || 0);
-    const label = data.classification || data.label || 'Unknown';
+    const label = getScoreStageLabel(score);
     const reasons = data.keyRiskIndicators || data.reasons || [];
 
     // Apply conditional border logic
@@ -1095,9 +1103,15 @@ function getRestoreIconVariant(score) {
 
 function getRestoreIconVariantFromData(data) {
     const classification = String(data?.classification || data?.label || '').toLowerCase();
-    if (classification === 'credible') return 'truthlayer-restore-high';
-    if (classification.includes('somewhat credible') || classification.includes('somewhat')) return 'truthlayer-restore-medium';
-    if (classification.includes('questionable') || classification.includes('misinformation') || classification.includes('unable')) return 'truthlayer-restore-low';
+    if (classification.includes('likely credible') || classification === 'credible' || classification.includes('low risk')) {
+        return 'truthlayer-restore-high';
+    }
+    if (classification.includes('needs verification') || classification.includes('medium risk') || classification.includes('somewhat credible') || classification.includes('somewhat')) {
+        return 'truthlayer-restore-medium';
+    }
+    if (classification.includes('low credibility') || classification.includes('high risk') || classification.includes('critical risk') || classification.includes('questionable') || classification.includes('misinformation') || classification.includes('unable')) {
+        return 'truthlayer-restore-low';
+    }
     return getRestoreIconVariant(data?.credibilityScore ?? data?.score ?? null);
 }
 
