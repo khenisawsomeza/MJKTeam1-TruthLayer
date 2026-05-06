@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
+from external_ai import external_ai_score
 
 app = FastAPI()
 
@@ -18,6 +19,8 @@ app.add_middleware(
 
 class PostData(BaseModel):
     text: str
+    source_score: float = 50.0  # Default to 50 if not provided
+
 
 # Load ML model
 try:
@@ -147,10 +150,15 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     fake_probability = ml_result["fake_probability"]
     ml_confidence = ml_result["confidence"]
     
-    # Convert ML probability to score (0-100)
-    # fake_probability 1.0 = score 0 (high risk)
-    # fake_probability 0.0 = score 100 (low risk)
+    # External AI (HF + RAG)
+    ext_ai_result = external_ai_score(text)
+    ext_ai_prob = ext_ai_result["external_ai_score"]
+    
+    # Convert ML and External AI probability to score (0-100)
+    # probability 1.0 = score 0 (high risk)
+    # probability 0.0 = score 100 (low risk)
     ml_score = (1.0 - fake_probability) * 100
+    ext_score = (1.0 - ext_ai_prob) * 100
     
     # Calculate overall confidence
     # High confidence when ML model is certain and rule-based system agrees
@@ -162,8 +170,13 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
         overall_confidence = min(1.0, overall_confidence * 1.2)  # Boost confidence if they agree
     
     # Final score: weighted average
-    # Rules: 30%, ML: 70% (ML model is more sophisticated)
-    final_score = (rule_score * 0.3) + (ml_score * 0.7)
+    # ML model -> 10%
+    # Rule-based -> 10%
+    # External AI (HF + RAG) -> 30%
+    # Source checker -> 50%
+    source_score = post.source_score
+    
+    final_score = (ml_score * 0.1) + (rule_score * 0.1) + (ext_score * 0.3) + (source_score * 0.5)
     final_score = max(0, min(100, final_score))  # Clamp 0-100
     
     # Determine label based on score
@@ -176,16 +189,23 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     
     # Combine all reasons
     all_reasons = rule_reasons + [ml_result["explanation"]]
-    
+    if ext_ai_result["reasoning"]:
+        all_reasons.append(f"External AI: {ext_ai_result['reasoning']}")
+        
     return {
         "fake_probability": fake_probability,
+        "external_ai_score": round(ext_score, 1),
+        "source_score": round(source_score, 1),
         "confidence": round(overall_confidence, 3),
         "score": round(final_score, 1),
         "label": label,
         "reasons": all_reasons,
+        "external_evidence": ext_ai_result["evidence_used"],
         "breakdown": {
             "rule_score": round(rule_score, 1),
-            "ml_score": round(ml_score, 1)
+            "ml_score": round(ml_score, 1),
+            "external_ai_score": round(ext_score, 1),
+            "source_score": round(source_score, 1)
         }
     }
 
