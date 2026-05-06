@@ -12,14 +12,14 @@
     "<all_urls>"
   ],
   "icons": {
-    "16": "TruthLayerLogo.png",
-    "48": "TruthLayerLogo.png",
-    "128": "TruthLayerLogo.png"
+    "16": "TruthLayerLogo48.png",
+    "48": "TruthLayerLogo48.png",
+    "128": "TruthLayerLogo128.png"
   },
   "action": {
     "default_popup": "popup.html",
     "default_title": "TruthLayer - Check Credibility",
-    "default_icon": "TruthLayerLogo.png"
+    "default_icon": "TruthLayerLogo48.png"
   },
   "background": {
     "service_worker": "background.js"
