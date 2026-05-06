@@ -34,19 +34,33 @@ app.post('/analyze', async (req, res) => {
         // 3. AI Service analysis (ML)
         let aiResult = null;
         try {
-            const response = await axios.post(AI_SERVICE_URL, { text: articleText });
+            const response = await axios.post(AI_SERVICE_URL, { 
+                text: articleText,
+                source_score: sourceResult.score 
+            });
             aiResult = response.data;
         } catch (aiError) {
             console.error("AI Service unavailable, using local fallback");
         }
 
         // 4. Aggregate results
-        const aggregated = scoring.aggregator.aggregate({
-            ruleScore: ruleResult.score,
-            mlScore: aiResult ? aiResult.score : 50,
-            sourceScore: sourceResult.score,
-            mlConfidence: aiResult ? aiResult.confidence : 0.1
-        });
+        let aggregated;
+        if (aiResult && aiResult.score !== undefined) {
+            // Use the Python backend's unified score directly
+            aggregated = {
+                finalScore: aiResult.score,
+                confidence: aiResult.confidence,
+                breakdown: aiResult.breakdown
+            };
+        } else {
+            // Fallback to local aggregation if AI service fails
+            aggregated = scoring.aggregator.aggregate({
+                ruleScore: ruleResult.score,
+                mlScore: 50,
+                sourceScore: sourceResult.score,
+                mlConfidence: 0.1
+            });
+        }
 
         // 5. Generate human-readable explanation
         const explanation = scoring.explainer.generate({

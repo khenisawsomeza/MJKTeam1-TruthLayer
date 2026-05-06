@@ -3,3 +3,10 @@ uvicorn==0.29.0
 scikit-learn==1.4.2
 joblib==1.4.2
 pydantic==2.7.1
+requests==2.32.3
+ddgs==9.8.0
+python-dotenv==1.0.1
+huggingface-hub==0.23.2
+beautifulsoup4==4.12.3
+openai>=1.0.0
+google-generativeai>=0.5.0
