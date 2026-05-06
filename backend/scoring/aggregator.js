@@ -98,17 +98,15 @@ function determineLabel(score, confidence) {
         return 'Uncertain';
     }
 
-    if (score >= 80) {
-        return 'Low Risk';
-    } else if (score >= 60) {
+    if (score >= 70) {
         return 'Likely Credible';
-    } else if (score >= 40) {
-        return 'Medium Risk';
-    } else if (score >= 20) {
-        return 'High Risk';
-    } else {
-        return 'Critical Risk';
     }
+
+    if (score >= 40) {
+        return 'Needs Verification';
+    }
+
+    return 'Low Credibility';
 }
 
 module.exports = {

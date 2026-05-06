@@ -203,12 +203,12 @@ def analyze_post(post: PostData) -> Dict[str, Any]:
     final_score = max(0, min(100, final_score))  # Clamp 0-100
     
     # Determine label based on score
-    if final_score >= 75:
-        label = "Low Risk"
-    elif final_score >= 50:
-        label = "Medium Risk"
+    if final_score >= 70:
+        label = "Likely Credible"
+    elif final_score >= 40:
+        label = "Needs Verification"
     else:
-        label = "High Risk"
+        label = "Low Credibility"
     
     # Combine all reasons
     all_reasons = rule_reasons + [ml_result["explanation"]]

@@ -5,6 +5,11 @@ let postDataMap = {}; // Map post signatures to analysis data
 let lastActivePostSignature = null; // Track the most recently interacted post
 let pendingShareData = null; // Store analysis data of the post being shared
 
+const SCORE_THRESHOLDS = {
+    lowMax: 39,
+    highMin: 70
+};
+
 // Load initial state
 chrome.storage.local.get(["fbPaused"], (data) => {
     fbPaused = !!data.fbPaused;
@@ -76,6 +81,13 @@ function debugLog(...args) {
     if (DEBUG_MODE) {
         console.log('[TruthLayer Debug]', ...args);
     }
+}
+
+function getScoreStage(score) {
+    if (typeof score !== 'number') return 'unknown';
+    if (score >= SCORE_THRESHOLDS.highMin) return 'high';
+    if (score <= SCORE_THRESHOLDS.lowMax) return 'low';
+    return 'medium';
 }
 
 function isShareNowTrigger(el) {
@@ -212,14 +224,12 @@ function showModalForElement(el, data = null) {
         e.stopPropagation();
         e.preventDefault();
 
-        // Check credibility - only show countdown for low credibility (score < 50)
-        // High Risk (< 50) triggers countdown. Medium Risk (50-79) allows sharing without countdown.
         const score = pendingShareData?.credibilityScore ?? pendingShareData?.score ?? null;
+        const stage = getScoreStage(score);
         debugLog(`Share Anyway clicked. Score: ${score}`);
 
-        if (score !== null && score >= 50) {
-            // High or medium credibility - allow share without countdown
-            debugLog(`✓ Share allowed for MIDDLE risk/High credibility (${score}). No countdown.`);
+        if (stage === 'medium' || stage === 'high') {
+            debugLog(`✓ Share allowed for ${stage} stage post (${score}). No countdown.`);
             if (pendingShareElement) {
                 pendingShareElement.dataset.truthlayerBypass = '1';
                 try {
@@ -233,7 +243,7 @@ function showModalForElement(el, data = null) {
             return;
         }
 
-        debugLog(`✗ HIGH risk or unknown (${score}). Starting countdown.`);
+        debugLog(`✗ Low credibility or unknown (${score}). Starting countdown.`);
 
         // Start a 5-second countdown where the user can cancel
         countdownSeconds = 5;
@@ -372,9 +382,10 @@ document.addEventListener('click', (ev) => {
 
         const score = data?.credibilityScore ?? data?.score ?? null;
 
-        // NEW LOGIC: Only show modal for MIDDLE risk (50-79) and HIGH risk (< 50)
-        if (score !== null && score >= 80) {
-            debugLog(`✓ Allowing share for LOW risk post (score: ${score})`);
+        const stage = getScoreStage(score);
+
+        if (stage === 'high') {
+            debugLog(`✓ Allowing share for likely credible post (score: ${score})`);
             return; // allow default behavior
         }
 
@@ -966,10 +977,11 @@ function injectBanner(postElement, data) {
 
     let themeClass = 'truthlayer-badge-green';
     let iconClass = 'safe';
-    if (score < 50) {
+    const stage = getScoreStage(score);
+    if (stage === 'low') {
         themeClass = 'truthlayer-badge-red';
         iconClass = 'warning';
-    } else if (score < 80) {
+    } else if (stage === 'medium') {
         themeClass = 'truthlayer-badge-yellow';
         iconClass = 'caution';
     }
@@ -1076,8 +1088,8 @@ function injectBanner(postElement, data) {
 
 function getRestoreIconVariant(score) {
     if (typeof score !== 'number') return 'truthlayer-restore-unknown';
-    if (score >= 80) return 'truthlayer-restore-high';
-    if (score >= 50) return 'truthlayer-restore-medium';
+    if (score >= SCORE_THRESHOLDS.highMin) return 'truthlayer-restore-high';
+    if (score > SCORE_THRESHOLDS.lowMax) return 'truthlayer-restore-medium';
     return 'truthlayer-restore-low';
 }
 

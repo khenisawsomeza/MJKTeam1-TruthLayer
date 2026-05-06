@@ -88,17 +88,17 @@ function generateNarrative(score, confidence, label) {
     let narrative = '';
 
     // Base narrative on score
-    if (label === 'Low Risk') {
+    if (label === 'Likely Credible') {
         narrative = `This content appears credible (${score}/100). `;
         if (confidence > 0.7) {
             narrative += 'Language patterns align with factual reporting. Source appears reliable.';
         } else {
             narrative += 'However, some indicators suggest caution.';
         }
-    } else if (label === 'Medium Risk') {
+    } else if (label === 'Needs Verification') {
         narrative = `This content shows mixed signals (${score}/100). `;
         narrative += 'Some language patterns are concerning, but the source or AI analysis offers some reassurance.';
-    } else if (label === 'High Risk') {
+    } else if (label === 'Low Credibility') {
         narrative = `This content exhibits credibility concerns (${score}/100). `;
         narrative += 'Multiple red flags detected including sensational language, unverified sources, or suspicious patterns.';
     } else {
@@ -161,9 +161,9 @@ function formatForAudience(explanation, audience = 'general') {
  */
 function getEmojiForLabel(label) {
     const emojiMap = {
-        'Low Risk': '✓',
-        'Medium Risk': '⚠',
-        'High Risk': '✗',
+        'Likely Credible': '✓',
+        'Needs Verification': '⚠',
+        'Low Credibility': '✗',
         'Uncertain': '?'
     };
     return emojiMap[label] || '?';
@@ -181,7 +181,7 @@ function extractKeyFindings(explanation) {
     // Add score context
     if (explanation.score < 40) {
         findings.push('Multiple credibility red flags detected');
-    } else if (explanation.score < 60) {
+    } else if (explanation.score < 70) {
         findings.push('Mixed credibility signals present');
     }
 

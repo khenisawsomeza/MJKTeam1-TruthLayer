@@ -41,6 +41,11 @@ const sourceCredibility = document.getElementById("source-credibility");
 // Buttons
 const btnFullAnalysis = document.getElementById("btn-full-analysis");
 
+const SCORE_THRESHOLDS = {
+  lowMax: 39,
+  highMin: 70,
+};
+
 // ---- Risk icon mapping ----
 const RISK_ICONS = [
   {
@@ -105,6 +110,30 @@ function normalizeReasons(reasons) {
     .filter((reason) => reason.length > 0);
 }
 
+function getScoreStage(score) {
+  if (score >= SCORE_THRESHOLDS.highMin) {
+    return {
+      label: "Likely Credible",
+      className: "verdict-high",
+      borderColor: "#27ae60",
+    };
+  }
+
+  if (score <= SCORE_THRESHOLDS.lowMax) {
+    return {
+      label: "Low Credibility",
+      className: "verdict-low",
+      borderColor: "#e74c3c",
+    };
+  }
+
+  return {
+    label: "Needs Verification",
+    className: "verdict-medium",
+    borderColor: "#e8c547",
+  };
+}
+
 // ---- Render Article Preview ----
 function renderArticle(pageTitle, pageDomain, contentSnippet) {
   articleTitle.textContent = pageTitle || "Untitled Page";
@@ -126,23 +155,11 @@ function renderScore(score) {
   }, 200);
 
   // Verdict badge
-  let verdictText = "Needs Verification";
-  let verdictClass = "verdict-medium";
-  let borderColor = "#e8c547";
+  const stage = getScoreStage(score);
 
-  if (score >= 70) {
-    verdictText = "Likely Credible";
-    verdictClass = "verdict-high";
-    borderColor = "#27ae60";
-  } else if (score < 40) {
-    verdictText = "Low Credibility";
-    verdictClass = "verdict-low";
-    borderColor = "#e74c3c";
-  }
-
-  verdictBadge.textContent = verdictText;
-  verdictBadge.className = "verdict-badge " + verdictClass;
-  scoreCard.style.borderColor = borderColor;
+  verdictBadge.textContent = stage.label;
+  verdictBadge.className = "verdict-badge " + stage.className;
+  scoreCard.style.borderColor = stage.borderColor;
 }
 
 // ---- Render Risk Indicators ----
@@ -217,7 +234,7 @@ function renderResults(data, pageTitle, pageDomain, contentSnippet) {
   // Handle different potential field names from AI service
   const score = data.score ?? data.credibility_score ?? 50;
   const reasons = normalizeReasons(data.reasons ?? data.explanation ?? []);
-  const label = data.label ?? (score >= 70 ? "Likely Credible" : score < 40 ? "Low Credibility" : "Needs Verification");
+  const label = data.label ?? getScoreStage(score).label;
 
   renderArticle(pageTitle, pageDomain, contentSnippet);
   renderScore(score);
