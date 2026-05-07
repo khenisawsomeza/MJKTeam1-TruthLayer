@@ -32,6 +32,37 @@ TruthLayer utilizes a three-tier architecture to deliver real-time analysis:
 
 ## 3. How to Set it Up
 
+TruthLayer supports two development setups:
+
+- **Docker mode**: Run the backend and AI service together with Docker Compose.
+- **Local mode**: Run the backend with Node.js and the AI service with Python on your machine.
+
+Use **one setup mode at a time**. Both modes use the same ports:
+
+- `3000` for the backend
+- `8000` for the AI service
+
+If Docker is already running on those ports, do not also start `npm start` or `uvicorn` locally. If you want to switch to local development, stop Docker first with:
+
+```bash
+docker compose down
+```
+
+### API Key Setup
+
+The AI service can run without external API keys, but the LLM-based reasoning layer will fall back to a neutral response. To enable external AI analysis, create `ai-service/.env` and add at least one valid provider key:
+
+```text
+OPENAI_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
+GROQ_API_KEY=your_key_here
+```
+
+Notes:
+
+- At least one key is required for OpenAI, Gemini, or Groq-backed reasoning to work.
+- If you update `ai-service/.env` while the service is already running, restart the AI service or rerun Docker Compose so the new environment variables are loaded.
+
 ### Docker Setup for Judges
 TruthLayer's backend system can be started with Docker Compose. This runs the Node.js backend and FastAPI AI service together; the Chrome extension stays outside Docker and connects to the backend on `http://localhost:3000`.
 
@@ -53,6 +84,8 @@ docker compose version
 ```
 
 #### Run the backend system
+From the repository root, make sure port `3000` and port `8000` are not already being used by local runs of `npm start` or `uvicorn`.
+
 From the repository root:
 
 ```bash
@@ -108,6 +141,24 @@ docker compose down
 - Container dependencies are isolated from the host through Docker images and volumes.
 - The Compose file is organized so future services such as a database, Redis, or additional ML services can be added as new named services.
 - If port `3000` or `8000` is already in use, stop the local process using that port before running Docker Compose.
+- If you add or change API keys in `ai-service/.env`, restart the AI service:
+
+```bash
+docker compose restart ai-service
+```
+
+If the container still seems to use old values, rebuild and restart the full stack:
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+### Local Development Setup
+
+Use this mode if you want to run the backend and AI service directly on your machine instead of through Docker.
+
+Before starting, make sure Docker Compose is not still running on ports `3000` and `8000`.
 
 ### Prerequisites
 - Node.js (v16 or higher)
@@ -132,7 +183,13 @@ docker compose down
     ```bash
     pip install -r requirements.txt
     ```
-3.  Start the service:
+3.  Create `ai-service/.env` and add at least one valid API key:
+    ```text
+    OPENAI_API_KEY=your_key_here
+    GEMINI_API_KEY=your_key_here
+    GROQ_API_KEY=your_key_here
+    ```
+4.  Start the service:
     ```bash
     python -m uvicorn app.main:app --reload --port 8000
     ```
