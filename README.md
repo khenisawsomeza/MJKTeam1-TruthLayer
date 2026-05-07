@@ -71,6 +71,55 @@ curl -X POST https://mjkteam1-truthlayer.onrender.com/analyze \
   -d '{"text":"Breaking news sample text for credibility analysis","url":"https://example.com","source":"example.com"}'
 ```
 
+## 4. Testing Sites and Keywords
+
+Use these sample links and text prompts to test TruthLayer's article analysis, source scoring, and misinformation detection behavior.
+
+### Real News Test Links
+
+- `https://www.abs-cbn.com/news/nation/2026/5/4/leviste-urges-probe-into-alleged-recto-gardiola-link-1619`
+- `https://www.bbc.com/sport/football/articles/c2e2xjyeyk7o`
+- `https://www.theguardian.com/world/2026/may/03/three-passengers-dead-after-suspected-hantavirus-outbreak-on-cruise-ship`
+- `https://edition.cnn.com/2026/05/04/world/live-news/iran-war-hormuz-trump`
+- `https://www.philstar.com/headlines/2026/05/04/2525627/p41-million-cash-awarded-pnps-big-crime-tipsters`
+
+### Satire or Fake News Test Links
+
+- `https://theonion.com/doj-to-bring-back-firing-squad-as-means-of-entertainment/`
+- `https://www.borowitzreport.com/p/high-jet-fuel-cost-forces-king-to`
+- `https://adobochronicles.com/2025/06/04/senate-class-dismissed/`
+- `https://clickhole.com/insidious-advertising-thousands-of-people-have-begun-noticing-eye-floaters-shaped-like-cameron-winter/`
+
+### Facebook Post Text Prompts
+
+Copy these into test posts or use them as manual text samples when checking misinformation detection behavior:
+
+```text
+Hinihiling ko ang inyong kapatawaran. Gusto kong humingi ng sorry sa pamilya Duterte dahil sila ang nadidiin, kahit alam kong puro kabutihan ang ginagawa nila sa bansa. Mali ako na hinayaan kong manaig ang kasamaan, greed for money.
+```
+
+```text
+New president na! AFP bumaliktad na! Good news! Kinausap na si VP Sara!
+```
+
+```text
+Something does not add up and the Filipino people deserve to know the truth. Allegations have surfaced regarding physical discrepancies observed in President Marcos, sparking intense speculation about a potential body double.
+```
+
+```text
+The United Nations (UN) Appoints International Religious Leader Pastor Apollo C. Quiboloy as Peace Envoy in U.S.-Middle East Dialogue.
+```
+
+```text
+Game over na! Senado solid Sara na! Cayetano nanumpa na!
+```
+
+### Facebook Post Test Links
+
+- `https://www.facebook.com/share/p/1DWijSGifz/`
+- `https://www.facebook.com/share/p/17csvmqGxD/`
+
+
 
 ------------------------------------------ADDITIONALS-----------------------------------
 
@@ -235,3 +284,4 @@ Notes:
 
 - At least one key is required for OpenAI, Gemini, or Groq-backed reasoning to work.
 - If you update `ai-service/.env` while the service is already running, restart the AI service or rerun Docker Compose so the new environment variables are loaded.
+
