@@ -32,7 +32,11 @@ TruthLayer utilizes a three-tier architecture to deliver real-time analysis:
 
 ## 3. How to Set it Up
 
-TruthLayer supports two development setups:
+TruthLayer supports a hosted judging setup plus two development setups.
+
+For capstone or thesis judging, deploy the backend and AI service online, then give judges only the Chrome extension folder. See [docs/deployment.md](docs/deployment.md) for the full free-hosting deployment guide.
+
+Development setups:
 
 - **Docker mode**: Run the backend and AI service together with Docker Compose.
 - **Local mode**: Run the backend with Node.js and the AI service with Python on your machine.
@@ -63,7 +67,7 @@ Notes:
 - At least one key is required for OpenAI, Gemini, or Groq-backed reasoning to work.
 - If you update `ai-service/.env` while the service is already running, restart the AI service or rerun Docker Compose so the new environment variables are loaded.
 
-### Docker Setup for Judges
+### Docker Setup for Local Development
 TruthLayer's backend system can be started with Docker Compose. This runs the Node.js backend and FastAPI AI service together; the Chrome extension stays outside Docker and connects to the backend on `http://localhost:3000`.
 
 This setup works the same way on macOS and Windows once Docker Desktop is installed and running.

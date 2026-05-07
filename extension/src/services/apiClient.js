@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/analyze';
+const API_URL = self.TRUTHLAYER_CONFIG?.API_URL || 'http://localhost:3000/analyze';
 
 function analyzeContent(payload) {
     return fetch(API_URL, {
@@ -14,4 +14,3 @@ function analyzeContent(payload) {
         return response.json();
     });
 }
-

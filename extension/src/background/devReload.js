@@ -1,7 +1,11 @@
 // Development helper: poll a local /version endpoint and reload extension when it changes.
 // This is safe to leave in during development; it will silently fail if localhost isn't reachable.
 (function setupDevAutoReload() {
-    const VERSION_URL = 'http://localhost:3000/version';
+    if (!self.TRUTHLAYER_CONFIG?.ENABLE_DEV_RELOAD) {
+        return;
+    }
+
+    const VERSION_URL = self.TRUTHLAYER_CONFIG?.VERSION_URL || 'http://localhost:3000/version';
     const POLL_INTERVAL_MS = 3000;
     let current = null;
 
@@ -36,4 +40,3 @@
         console.error('TruthLayer: could not start dev auto-reload', e);
     }
 })();
-
