@@ -138,7 +138,7 @@ Instance Type: Free
 
 ```text
 NODE_ENV=production
-AI_SERVICE_URL=https://YOUR_USERNAME-truthlayer-ai-service.hf.space/analyze
+AI_SERVICE_URL=https://YOUR_USERNAME-truth-layer-ai-service.hf.space/analyze
 AI_SERVICE_TIMEOUT_MS=45000
 CORS_ORIGIN=*
 ```
@@ -150,13 +150,13 @@ Do not manually set `PORT` on Render unless needed. Render provides it automatic
 11. Test:
 
 ```bash
-curl https://truthlayer-backend.onrender.com/version
+curl https://mjkteam1-truthlayer.onrender.com/version
 ```
 
 12. Test the full backend to AI path:
 
 ```bash
-curl -X POST https://truthlayer-backend.onrender.com/analyze \
+curl -X POST https://mjkteam1-truthlayer.onrender.com/analyze \
   -H "Content-Type: application/json" \
   -d '{"text":"Breaking news sample text for credibility analysis","url":"https://example.com","source":"example.com"}'
 ```
@@ -167,8 +167,8 @@ Update `extension/src/config.js` after the backend URL exists:
 
 ```js
 self.TRUTHLAYER_CONFIG = {
-    API_URL: 'https://truthlayer-backend.onrender.com/analyze',
-    VERSION_URL: 'https://truthlayer-backend.onrender.com/version',
+    API_URL: 'https://mjkteam1-truthlayer.onrender.com/analyze',
+    VERSION_URL: 'https://mjkteam1-truthlayer.onrender.com/version',
     ENABLE_DEV_RELOAD: false
 };
 ```
