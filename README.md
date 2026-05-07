@@ -32,40 +32,48 @@ TruthLayer utilizes a three-tier architecture to deliver real-time analysis:
 
 ## 3. How to Set it Up
 
-TruthLayer supports a hosted judging setup plus two development setups.
+TruthLayer can be run in three ways:
 
-For capstone or thesis judging, deploy the backend and AI service online, then give judges only the Chrome extension folder. See [docs/deployment.md](docs/deployment.md) for the full free-hosting deployment guide.
+1. **Recommended: Extension-only setup using the deployed services**
+2. **Docker setup for local full-stack testing**
+3. **Manual local setup without Docker**
 
-Development setups:
+For judging, use the recommended setup. The backend and AI service are already deployed online, so you only need to load the Chrome extension. No Docker, Node.js, or Python installation is required for this.
 
-- **Docker mode**: Run the backend and AI service together with Docker Compose.
-- **Local mode**: Run the backend with Node.js and the AI service with Python on your machine.
+### Recommended Setup: Extension Only
 
-Use **one setup mode at a time**. Both modes use the same ports:
+Use this setup for judging and demos.
 
-- `3000` for the backend
-- `8000` for the AI service
+#### Requirements
+- Chrome Browser
+- The `extension/` folder from this project
 
-If Docker is already running on those ports, do not also start `npm start` or `uvicorn` locally. If you want to switch to local development, stop Docker first with:
+#### Steps
+1. Open Chrome and go to `chrome://extensions/`.
+2. Enable **Developer Mode**.
+3. Click **Load unpacked**.
+4. Select the `extension/` folder.
+5. Pin the TruthLayer extension.
+6. Open Facebook or any article page and use TruthLayer immediately.
+
+#### Verify Deployed Backend
+You can confirm the deployed backend is online with:
 
 ```bash
-docker compose down
+curl https://mjkteam1-truthlayer.onrender.com/version
 ```
 
-### API Key Setup
+You can test the full deployed backend-to-AI flow with:
 
-The AI service can run without external API keys, but the LLM-based reasoning layer will fall back to a neutral response. To enable external AI analysis, create `ai-service/.env` and add at least one valid provider key:
-
-```text
-OPENAI_API_KEY=your_key_here
-GEMINI_API_KEY=your_key_here
-GROQ_API_KEY=your_key_here
+```bash
+curl -X POST https://mjkteam1-truthlayer.onrender.com/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Breaking news sample text for credibility analysis","url":"https://example.com","source":"example.com"}'
 ```
 
-Notes:
 
-- At least one key is required for OpenAI, Gemini, or Groq-backed reasoning to work.
-- If you update `ai-service/.env` while the service is already running, restart the AI service or rerun Docker Compose so the new environment variables are loaded.
+------------------------------------------ADDITIONALS-----------------------------------
+
 
 ### Docker Setup for Local Development
 TruthLayer's backend system can be started with Docker Compose. This runs the Node.js backend and FastAPI AI service together; the Chrome extension stays outside Docker and connects to the backend on `http://localhost:3000`.
@@ -166,7 +174,7 @@ Before starting, make sure Docker Compose is not still running on ports `3000` a
 
 ### Prerequisites
 - Node.js (v16 or higher)
-- Python 3.9+
+- Python 3.11
 - Chrome Browser
 
 ### Step 1: Backend API
@@ -210,3 +218,20 @@ Before starting, make sure Docker Compose is not still running on ports `3000` a
 - Visit `http://localhost:3000/version` to ensure the backend is alive.
 - Visit `http://localhost:8000/health` to check the AI service.
 - Open Facebook and look for the TruthLayer analysis banners appearing on posts.
+
+### API Key Setup for Local AI Service
+
+The deployed AI service already has its environment configured. This section is only needed if you run the AI service yourself with Docker or manual local setup.
+
+The AI service can run without external API keys, but the LLM-based reasoning layer will fall back to a neutral response. To enable external AI analysis, create `ai-service/.env` and add at least one valid provider key:
+
+```text
+OPENAI_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
+GROQ_API_KEY=your_key_here
+```
+
+Notes:
+
+- At least one key is required for OpenAI, Gemini, or Groq-backed reasoning to work.
+- If you update `ai-service/.env` while the service is already running, restart the AI service or rerun Docker Compose so the new environment variables are loaded.
