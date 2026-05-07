@@ -32,6 +32,83 @@ TruthLayer utilizes a three-tier architecture to deliver real-time analysis:
 
 ## 3. How to Set it Up
 
+### Docker Setup for Judges
+TruthLayer's backend system can be started with Docker Compose. This runs the Node.js backend and FastAPI AI service together; the Chrome extension stays outside Docker and connects to the backend on `http://localhost:3000`.
+
+This setup works the same way on macOS and Windows once Docker Desktop is installed and running.
+
+#### Requirements
+- Docker Desktop installed and running
+- Chrome Browser
+
+#### Install Docker Desktop
+- macOS: Install Docker Desktop from `https://www.docker.com/products/docker-desktop/`, open Docker Desktop, and wait until it says Docker is running.
+- Windows: Install Docker Desktop from `https://www.docker.com/products/docker-desktop/`, enable WSL 2 if prompted, open Docker Desktop, and wait until it says Docker is running.
+
+After installation, confirm Docker is available:
+
+```bash
+docker --version
+docker compose version
+```
+
+#### Run the backend system
+From the repository root:
+
+```bash
+docker compose up --build
+```
+
+Leave this terminal running while testing the extension.
+
+Docker Compose starts:
+- `backend` on `http://localhost:3000`
+- `ai-service` on `http://localhost:8000`
+
+Inside Docker, the backend talks to the AI service through Docker networking:
+
+```bash
+AI_SERVICE_URL=http://ai-service:8000/analyze
+```
+
+For local non-Docker development, the backend still defaults to:
+
+```bash
+http://localhost:8000/analyze
+```
+
+#### Extension setup
+1. Open `chrome://extensions`
+2. Enable Developer Mode
+3. Click Load unpacked
+4. Select the `extension/` folder
+
+#### Verify the system
+In a second terminal, run:
+
+```bash
+curl http://localhost:3000/version
+curl http://localhost:8000/health
+```
+
+Expected results:
+- The backend returns a JSON version response.
+- The AI service returns a healthy JSON response.
+
+To stop the Docker services, press `Ctrl+C` in the Compose terminal, or run:
+
+```bash
+docker compose down
+```
+
+#### Development notes
+- Source code is bind-mounted into both containers for development.
+- Backend hot reload uses Node.js 20 watch mode with `npm run dev`.
+- AI service hot reload uses `uvicorn --reload`.
+- Container dependencies are isolated from the host through Docker images and volumes.
+- The Compose file is organized so future services such as a database, Redis, or additional ML services can be added as new named services.
+- If port `3000` or `8000` is already in use, stop the local process using that port before running Docker Compose.
+
 ### Prerequisites
 - Node.js (v16 or higher)
 - Python 3.9+
