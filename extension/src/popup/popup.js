@@ -39,7 +39,7 @@ const warningTriggers = document.getElementById("warning-triggers");
 const sourceCredibility = document.getElementById("source-credibility");
 
 // Buttons
-const btnFullAnalysis = document.getElementById("btn-full-analysis");
+
 const SCORE_THRESHOLDS = {
   lowMax: 40,
   highMin: 70,
@@ -396,41 +396,6 @@ async function initFacebookToggle() {
 
 
 
-// ---- Facebook Pause Toggle Logic ----
-async function initFacebookToggle() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
-
-  const isFacebook = tab.url && tab.url.includes("facebook.com");
-
-  if (isFacebook) {
-    document.body.classList.add("compact-mode");
-    // ON FACEBOOK: Show ONLY the toggle
-    facebookSettings.classList.remove("hidden");
-    generalAnalysisUI.classList.add("hidden");
-    statusText.textContent = "Facebook Feed Control";
-    headerStatus.style.display = "none"; // Hide pulsing dot on settings view
-
-    // Load state
-    const { fbPaused } = await chrome.storage.local.get("fbPaused");
-    facebookToggle.checked = !!fbPaused;
-
-    facebookToggle.addEventListener("change", async (e) => {
-      const paused = e.target.checked;
-      await chrome.storage.local.set({ fbPaused: paused });
-
-      // Notify content script in current tab
-      chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_FB_PAUSE", paused });
-    });
-  } else {
-    // NOT ON FACEBOOK: Show Analysis
-    facebookSettings.classList.add("hidden");
-    generalAnalysisUI.classList.remove("hidden");
-
-    // Run the normal article analysis
-    analyze();
-  }
-}
 
 // ---- Start on popup open ----
 document.addEventListener("DOMContentLoaded", () => {
