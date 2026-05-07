@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TruthLayer Analyze Request",
+  "type": "object",
+  "properties": {
+    "text": { "type": "string" },
+    "content": { "type": "string" },
+    "url": { "type": "string" },
+    "source": { "type": "object" },
+    "platform": { "type": "string" },
+    "author": { "type": "object" },
+    "authorUrl": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}
+

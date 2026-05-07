@@ -12,17 +12,17 @@
     "<all_urls>"
   ],
   "icons": {
-    "16": "TruthLayerLogo48.png",
-    "48": "TruthLayerLogo48.png",
-    "128": "TruthLayerLogo128.png"
+    "16": "assets/TruthLayerLogo48.png",
+    "48": "assets/TruthLayerLogo48.png",
+    "128": "assets/TruthLayerLogo128.png"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_title": "TruthLayer - Check Credibility",
-    "default_icon": "TruthLayerLogo48.png"
+    "default_icon": "assets/TruthLayerLogo48.png"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/index.js"
   },
   "content_scripts": [
     {
@@ -30,10 +30,10 @@
         "https://*.facebook.com/*"
       ],
       "js": [
-        "content.js"
+        "src/content/facebookContent.js"
       ],
       "css": [
-        "styles.css"
+        "styles/facebook.css"
       ]
     }
   ]

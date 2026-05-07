@@ -1,7 +1,11 @@
-import os
+from pathlib import Path
+
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+
+
+MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
 
 # Enhanced Dataset with more examples
 # Fake = 1, Real = 0
@@ -55,9 +59,9 @@ def train_and_save():
     model.fit(X, labels)
     
     # Save models
-    os.makedirs(os.path.dirname(__file__), exist_ok=True)
-    joblib.dump(vectorizer, 'vectorizer.pkl')
-    joblib.dump(model, 'model.pkl')
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(vectorizer, MODEL_DIR / 'vectorizer.pkl')
+    joblib.dump(model, MODEL_DIR / 'model.pkl')
     
     print("✓ Model saved to model.pkl")
     print("✓ Vectorizer saved to vectorizer.pkl")

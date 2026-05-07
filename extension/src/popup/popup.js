@@ -292,7 +292,7 @@ async function analyze() {
     try {
       extractionResults = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["extract-content.js"],
+        files: ["src/extractors/articleExtractor.js"],
       });
     } catch (injectionError) {
       showError(

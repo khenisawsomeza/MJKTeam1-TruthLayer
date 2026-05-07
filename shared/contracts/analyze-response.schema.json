@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TruthLayer Analyze Response",
+  "type": "object",
+  "properties": {
+    "success": { "type": "boolean" },
+    "score": { "type": "number" },
+    "credibilityScore": { "type": "number" },
+    "label": { "type": "string" },
+    "classification": { "type": "string" },
+    "confidence": { "type": "number" },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "keyRiskIndicators": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "narrative": { "type": "string" },
+    "sourceInfo": { "type": "object" },
+    "breakdown": { "type": "object" }
+  },
+  "additionalProperties": true
+}
+

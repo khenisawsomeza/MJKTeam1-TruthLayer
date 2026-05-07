@@ -57,7 +57,7 @@ TruthLayer utilizes a three-tier architecture to deliver real-time analysis:
     ```
 3.  Start the service:
     ```bash
-    python -m uvicorn app:app --reload --port 8000
+    python -m uvicorn app.main:app --reload --port 8000
     ```
     *The AI service will run on `http://localhost:8000`.*
 

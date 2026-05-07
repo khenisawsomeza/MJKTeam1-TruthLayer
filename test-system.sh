@@ -47,8 +47,8 @@ echo ""
 
 # Test 4: Check Backend Service
 echo "📝 Test 4: Checking Backend Service..."
-if curl -s http://localhost:3000/health > /dev/null 2>&1; then
-    HEALTH=$(curl -s http://localhost:3000/health)
+if curl -s http://localhost:3000/version > /dev/null 2>&1; then
+    HEALTH=$(curl -s http://localhost:3000/version)
     echo -e "${GREEN}✓ Backend Service is running${NC}"
     echo "  Response: $HEALTH"
 else
@@ -58,24 +58,24 @@ echo ""
 
 # Test 5: Check model files
 echo "📝 Test 5: Checking ML model files..."
-if [ -f "ai-service/model.pkl" ]; then
-    SIZE=$(ls -lh ai-service/model.pkl | awk '{print $5}')
+if [ -f "ai-service/models/model.pkl" ]; then
+    SIZE=$(ls -lh ai-service/models/model.pkl | awk '{print $5}')
     echo -e "${GREEN}✓ model.pkl found (${SIZE})${NC}"
 else
-    echo -e "${RED}✗ model.pkl not found - run 'python3 train.py'${NC}"
+    echo -e "${RED}✗ model.pkl not found - run 'python3 training/train.py'${NC}"
 fi
 
-if [ -f "ai-service/vectorizer.pkl" ]; then
-    SIZE=$(ls -lh ai-service/vectorizer.pkl | awk '{print $5}')
+if [ -f "ai-service/models/vectorizer.pkl" ]; then
+    SIZE=$(ls -lh ai-service/models/vectorizer.pkl | awk '{print $5}')
     echo -e "${GREEN}✓ vectorizer.pkl found (${SIZE})${NC}"
 else
-    echo -e "${RED}✗ vectorizer.pkl not found - run 'python3 train.py'${NC}"
+    echo -e "${RED}✗ vectorizer.pkl not found - run 'python3 training/train.py'${NC}"
 fi
 echo ""
 
 # Test 6: Run API test if backend is running
 echo "📝 Test 6: Running API test..."
-if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+if curl -s http://localhost:3000/version > /dev/null 2>&1; then
     echo "Testing high-risk content..."
     RESULT=$(curl -s -X POST http://localhost:3000/analyze \
       -H "Content-Type: application/json" \
@@ -102,5 +102,5 @@ echo ""
 echo "✅ Testing complete!"
 echo ""
 echo "To start the services, run:"
-echo "  Terminal 1: cd ai-service && python3 -m uvicorn app:app --port 8000"
+echo "  Terminal 1: cd ai-service && ./venv/bin/python -m uvicorn app.main:app --port 8000"
 echo "  Terminal 2: cd backend && npm start"

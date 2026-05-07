@@ -1,0 +1,11 @@
+{
+  "lowMax": 40,
+  "highMin": 70,
+  "labels": {
+    "high": "Likely Credible",
+    "medium": "Needs Verification",
+    "low": "Low Credibility",
+    "unknown": "Unable to Verify"
+  }
+}
+
